@@ -253,6 +253,63 @@ func (h *Handlers) AdminUpdateSettings(c echo.Context) error {
 	return c.Redirect(http.StatusSeeOther, "/admin")
 }
 
+// AdminGenerateBackups generates markdown backup files for all wiki pages.
+func (h *Handlers) AdminGenerateBackups(c echo.Context) error {
+	user := middleware.GetUser(c)
+	if user == nil || user.Role != models.RoleAdmin {
+		return echo.NewHTTPError(http.StatusForbidden, "Admin access required")
+	}
+
+	if h.backupService == nil {
+		c.Response().Header().Set("HX-Trigger", `{"showToast":{"message":"Backup service not configured","type":"error"}}`)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	ctx := c.Request().Context()
+
+	// Get all pages
+	filter := models.NewPageFilter()
+	filter.Limit = 10000 // Get all pages
+	pages, err := h.wikiService.ListPages(ctx, filter)
+	if err != nil {
+		c.Response().Header().Set("HX-Trigger", `{"showToast":{"message":"Failed to load pages","type":"error"}}`)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	// Generate backup for each page
+	var successCount, errorCount int
+	for _, pageSummary := range pages {
+		// Get full page content
+		page, err := h.wikiService.GetPage(ctx, pageSummary.Slug)
+		if err != nil {
+			errorCount++
+			continue
+		}
+
+		// Generate backup
+		pagePath := getPagePathFromSlug(page.Slug)
+		if err := h.backupService.SavePageAsMarkdown(page, user.Username, pagePath); err != nil {
+			errorCount++
+		} else {
+			successCount++
+		}
+	}
+
+	// Audit log
+	h.logAdminAction(c, "generate_backups", "system", nil, map[string]interface{}{
+		"success_count": successCount,
+		"error_count":   errorCount,
+	})
+
+	// Return result
+	message := "Generated " + strconv.Itoa(successCount) + " backup files"
+	if errorCount > 0 {
+		message += " (" + strconv.Itoa(errorCount) + " errors)"
+	}
+	c.Response().Header().Set("HX-Trigger", `{"showToast":{"message":"`+message+`","type":"success"}}`)
+	return c.NoContent(http.StatusOK)
+}
+
 // logAdminAction logs an admin action to the audit log.
 func (h *Handlers) logAdminAction(c echo.Context, action, entityType string, entityID *int64, details map[string]interface{}) {
 	user := middleware.GetUser(c)

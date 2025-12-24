@@ -74,9 +74,27 @@ func (h *Handlers) ImportMarkdown(c echo.Context) error {
 		title, slug, tags, body := parseMarkdownFile(string(content), file.Filename)
 
 		// Check if slug exists
-		existing, _ := h.wikiService.PageExists(c.Request().Context(), slug)
-		if existing {
-			// Append a number to make it unique
+		existingPage, _ := h.wikiService.GetPage(c.Request().Context(), slug)
+		if existingPage != nil {
+			// If existing page is a placeholder (empty content, auto-created), update it instead
+			if strings.TrimSpace(existingPage.Content) == "" {
+				// Update the placeholder page with actual content
+				update := models.PageUpdate{
+					Title:   &title,
+					Content: &body,
+					Tags:    tags,
+				}
+				result, err := h.wikiService.UpdatePage(c.Request().Context(), existingPage.ID, user.ID, update, "Imported content")
+				if err != nil {
+					failed = append(failed, file.Filename+" ("+err.Error()+")")
+					continue
+				}
+				imported = append(imported, title)
+				lastSlug = result.Page.Slug
+				continue
+			}
+
+			// Non-placeholder page exists, append a number to make slug unique
 			for i := 2; i < 100; i++ {
 				newSlug := slug + "-" + strconv.Itoa(i)
 				exists, _ := h.wikiService.PageExists(c.Request().Context(), newSlug)

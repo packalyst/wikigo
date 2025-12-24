@@ -416,6 +416,55 @@ func (db *DB) ListPages(ctx context.Context, filter models.PageFilter) ([]models
 	return pages, rows.Err()
 }
 
+// GetAllDescendants retrieves all descendant pages of a given page using recursive CTE.
+// Returns pages with their IDs and slugs for bulk updates.
+func (db *DB) GetAllDescendants(ctx context.Context, parentID int64) ([]struct {
+	ID   int64
+	Slug string
+}, error) {
+	rows, err := db.QueryContext(ctx, `
+		WITH RECURSIVE descendants AS (
+			SELECT id, slug
+			FROM pages
+			WHERE parent_id = ?
+			UNION ALL
+			SELECT p.id, p.slug
+			FROM pages p
+			JOIN descendants d ON p.parent_id = d.id
+		)
+		SELECT id, slug FROM descendants
+	`, parentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get descendants: %w", err)
+	}
+	defer rows.Close()
+
+	var result []struct {
+		ID   int64
+		Slug string
+	}
+	for rows.Next() {
+		var item struct {
+			ID   int64
+			Slug string
+		}
+		if err := rows.Scan(&item.ID, &item.Slug); err != nil {
+			return nil, fmt.Errorf("failed to scan descendant: %w", err)
+		}
+		result = append(result, item)
+	}
+
+	return result, rows.Err()
+}
+
+// UpdatePageSlug updates just the slug of a page (used for cascade updates).
+func (db *DB) UpdatePageSlug(ctx context.Context, pageID int64, newSlug string) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE pages SET slug = ?, updated_at = ? WHERE id = ?
+	`, newSlug, time.Now().UTC(), pageID)
+	return err
+}
+
 // GetPageChildren retrieves child pages of a given page.
 func (db *DB) GetPageChildren(ctx context.Context, parentID int64) ([]models.PageSummary, error) {
 	rows, err := db.QueryContext(ctx, `

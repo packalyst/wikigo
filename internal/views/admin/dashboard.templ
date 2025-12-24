@@ -198,6 +198,27 @@ templ Dashboard(data DashboardData) {
 						</a>
 					</div>
 				</div>
+
+				<!-- Maintenance -->
+				<div class="card mt-4">
+					<div class="card-header">
+						<h3 class="card-title">Maintenance</h3>
+					</div>
+					<div class="card-body">
+						<p class="form-hint mb-3">Generate markdown backup files for all wiki pages in the backups folder.</p>
+						<button
+							type="button"
+							class="btn btn-outline w-full"
+							hx-post="/admin/generate-backups"
+							hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
+							hx-swap="none"
+							hx-confirm="This will regenerate all backup files. Continue?"
+						>
+							@components.IconDownload("")
+							Generate All Backups
+						</button>
+					</div>
+				</div>
 			</div>
 		</div>
 		</div>

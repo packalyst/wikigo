@@ -22,6 +22,18 @@ var (
 	ErrRevisionNotFound = errors.New("revision not found")
 )
 
+// SlugChange represents a slug that was changed during an update.
+type SlugChange struct {
+	OldSlug string
+	NewSlug string
+}
+
+// UpdateResult contains the result of an update operation including any cascaded changes.
+type UpdateResult struct {
+	Page        *models.Page
+	SlugChanges []SlugChange // Includes all cascaded child slug changes
+}
+
 // WikiService handles wiki page operations.
 type WikiService struct {
 	db       *database.DB
@@ -151,7 +163,8 @@ func (s *WikiService) GetPageByID(ctx context.Context, id int64) (*models.Page, 
 }
 
 // UpdatePage updates an existing page.
-func (s *WikiService) UpdatePage(ctx context.Context, pageID, authorID int64, input models.PageUpdate, comment string) (*models.Page, error) {
+// Returns UpdateResult containing the page and any cascaded slug changes.
+func (s *WikiService) UpdatePage(ctx context.Context, pageID, authorID int64, input models.PageUpdate, comment string) (*UpdateResult, error) {
 	page, err := s.db.GetPageByID(ctx, pageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get page: %w", err)
@@ -160,10 +173,14 @@ func (s *WikiService) UpdatePage(ctx context.Context, pageID, authorID int64, in
 		return nil, ErrPageNotFound
 	}
 
+	var slugChanges []SlugChange
+
 	// Handle slug change
 	if input.Slug != nil {
 		newSlug := Slugify(*input.Slug)
 		if newSlug != "" && newSlug != page.Slug {
+			oldSlug := page.Slug
+
 			// Check for collision (but allow updating self)
 			existing, err := s.db.GetPageBySlug(ctx, newSlug)
 			if err != nil {
@@ -185,6 +202,30 @@ func (s *WikiService) UpdatePage(ctx context.Context, pageID, authorID int64, in
 
 			page.Slug = newSlug
 			page.ParentID = newParentID
+
+			// Cascade update: update all descendant slugs
+			descendants, err := s.db.GetAllDescendants(ctx, pageID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get descendants: %w", err)
+			}
+
+			for _, desc := range descendants {
+				// Replace old parent slug prefix with new one
+				// e.g., if oldSlug="linux" and newSlug="commands/linux"
+				// then child "linux/docker" becomes "commands/linux/docker"
+				if strings.HasPrefix(desc.Slug, oldSlug+"/") {
+					newChildSlug := newSlug + strings.TrimPrefix(desc.Slug, oldSlug)
+					if err := s.db.UpdatePageSlug(ctx, desc.ID, newChildSlug); err != nil {
+						return nil, fmt.Errorf("failed to update descendant slug: %w", err)
+					}
+					// Track the change for backup updates
+					slugChanges = append(slugChanges, SlugChange{
+						OldSlug: desc.Slug,
+						NewSlug: newChildSlug,
+					})
+					fmt.Printf("Cascade updated slug: %s -> %s\n", desc.Slug, newChildSlug)
+				}
+			}
 		}
 	}
 
@@ -243,7 +284,10 @@ func (s *WikiService) UpdatePage(ctx context.Context, pageID, authorID int64, in
 	tags, _ := s.db.GetPageTags(ctx, page.ID)
 	page.Tags = tags
 
-	return page, nil
+	return &UpdateResult{
+		Page:        page,
+		SlugChanges: slugChanges,
+	}, nil
 }
 
 // DeletePage removes a page.
@@ -301,9 +345,13 @@ func (s *WikiService) RevertToRevision(ctx context.Context, revisionID, authorID
 	content := rev.Content
 	comment := fmt.Sprintf("Reverted to revision %d", revisionID)
 
-	return s.UpdatePage(ctx, rev.PageID, authorID, models.PageUpdate{
+	result, err := s.UpdatePage(ctx, rev.PageID, authorID, models.PageUpdate{
 		Content: &content,
 	}, comment)
+	if err != nil {
+		return nil, err
+	}
+	return result.Page, nil
 }
 
 // Search performs full-text search on pages.

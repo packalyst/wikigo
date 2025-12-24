@@ -156,4 +156,5 @@ func (h *Handlers) RegisterRoutes(e *echo.Echo, sm *middleware.SessionManager, c
 	adminGroup.POST("/users/:id", h.AdminUpdateUser)
 	adminGroup.DELETE("/users/:id", h.AdminDeleteUser)
 	adminGroup.POST("/settings", h.AdminUpdateSettings)
+	adminGroup.POST("/generate-backups", h.AdminGenerateBackups)
 }

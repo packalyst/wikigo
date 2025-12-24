@@ -602,3 +602,21 @@ templ IconCopy(size string) {
 		</svg>
 	}
 }
+
+// IconDownload renders a download icon
+// Sizes: "sm" (14px), "" (16px), "lg" (20px)
+templ IconDownload(size string) {
+	if size == "" {
+		<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+		</svg>
+	} else if size == "sm" {
+		<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+		</svg>
+	} else {
+		<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+		</svg>
+	}
+}

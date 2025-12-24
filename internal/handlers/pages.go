@@ -352,7 +352,7 @@ func (h *Handlers) UpdatePage(c echo.Context) error {
 		update.Slug = &slug
 	}
 
-	page, err := h.wikiService.UpdatePage(ctx, pageID, user.ID, update, "Updated via web editor")
+	result, err := h.wikiService.UpdatePage(ctx, pageID, user.ID, update, "Updated via web editor")
 
 	if err != nil {
 		if errors.Is(err, services.ErrPageNotFound) {
@@ -364,6 +364,8 @@ func (h *Handlers) UpdatePage(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update page")
 	}
 
+	page := result.Page
+
 	// Handle backup: delete old if slug changed, save new
 	if h.backupService != nil {
 		if oldSlug != page.Slug {
@@ -374,6 +376,20 @@ func (h *Handlers) UpdatePage(c echo.Context) error {
 		// Save at new path
 		pagePath := getPagePathFromSlug(page.Slug)
 		_ = h.backupService.SavePageAsMarkdown(page, user.Username, pagePath)
+
+		// Handle cascaded slug changes for child pages
+		for _, change := range result.SlugChanges {
+			// Delete old backup
+			oldPath := getPagePathFromSlug(change.OldSlug)
+			_ = h.backupService.DeleteBackup(change.OldSlug, oldPath)
+
+			// Create new backup at new path (we need to fetch the page to get full content)
+			childPage, err := h.wikiService.GetPage(ctx, change.NewSlug)
+			if err == nil && childPage != nil {
+				newPath := getPagePathFromSlug(change.NewSlug)
+				_ = h.backupService.SavePageAsMarkdown(childPage, user.Username, newPath)
+			}
+		}
 	}
 
 	h.setFlash(c, "success", "Page updated successfully!")
