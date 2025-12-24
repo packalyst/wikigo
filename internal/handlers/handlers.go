@@ -102,8 +102,14 @@ func (h *Handlers) RegisterRoutes(e *echo.Echo, sm *middleware.SessionManager, c
 	// Health check (always public)
 	e.GET("/health", h.HealthCheck)
 
+	// Shared page routes (public, no CSRF needed for viewing)
+	e.GET("/s/:token", h.ViewSharedPage)
+	e.GET("/s/:token/*", h.ViewSharedPage)
+
 	// Public routes (may require auth if private wiki mode is enabled)
+	// Share middleware validates share tokens for private wiki access
 	publicGroup := e.Group("")
+	publicGroup.Use(middleware.ShareMiddleware(h.wikiService.GetDB()))
 	publicGroup.Use(middleware.RequireAuthIfPrivate(h.config))
 	publicGroup.GET("/", h.Home)
 	publicGroup.GET("/wiki/:slug", h.ViewPage)
@@ -146,6 +152,14 @@ func (h *Handlers) RegisterRoutes(e *echo.Echo, sm *middleware.SessionManager, c
 	editorGroup.POST("/upload", h.UploadFile)
 	editorGroup.GET("/import", h.ImportMarkdownForm)
 	editorGroup.POST("/import", h.ImportMarkdown)
+
+	// Share link management (editors and admins)
+	editorGroup.GET("/shares", h.ListShares)
+	editorGroup.GET("/shares/new/:pageId", h.CreateShareForm)
+	editorGroup.POST("/shares", h.CreateShare)
+	editorGroup.POST("/shares/:id/revoke", h.RevokeShare)
+	editorGroup.DELETE("/shares/:id", h.DeleteShare)
+	editorGroup.GET("/shares/:id", h.ViewShareStats)
 
 	// Admin routes
 	adminGroup := e.Group("/admin")

@@ -1,0 +1,604 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+	"gowiki/internal/services"
+)
+
+// SharesData contains data for the share links management page.
+type SharesData struct {
+	layouts.PageData
+	ShareLinks []models.ShareLink
+	Pages      []models.PageSummary
+	SiteURL    string
+}
+
+// Shares renders the share links management page.
+templ Shares(data SharesData) {
+	@layouts.Base(data.PageData) {
+		<div class="shares-layout">
+			<!-- Sidebar: Create Share -->
+			<aside class="shares-sidebar">
+				<div class="shares-sidebar-content">
+					<h2 class="shares-sidebar-title">Create Share Link</h2>
+					<p class="shares-sidebar-desc">Select a page to share</p>
+					<div class="page-selector">
+						<input
+							type="text"
+							id="page-search"
+							class="form-input"
+							placeholder="Search pages..."
+							autocomplete="off"
+							oninput="filterPages(this.value)"
+							onfocus="showPageDropdown()"
+						/>
+						<div id="page-dropdown" class="page-selector-dropdown">
+							for _, page := range data.Pages {
+								<div
+									class="page-selector-item"
+									data-page-id={ fmt.Sprintf("%d", page.ID) }
+									data-page-title={ page.Title }
+									onclick="selectPageAndOpenModal(this)"
+								>
+									<div class="page-selector-item-title">{ page.Title }</div>
+									<div class="page-selector-item-path">/{ page.Slug }</div>
+								</div>
+							}
+						</div>
+					</div>
+				</div>
+			</aside>
+
+			<!-- Main Content: Share Links List -->
+			<div class="shares-content">
+				<div class="page-header">
+					<h1 class="page-title">Share Links</h1>
+				</div>
+
+				if len(data.ShareLinks) == 0 {
+					<div class="empty-state">
+						@components.IconShare("lg")
+						<h3 class="empty-state-title">No share links yet</h3>
+						<p class="empty-state-text">Select a page from the sidebar to create your first share link.</p>
+					</div>
+				} else {
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Page</th>
+								<th>Status</th>
+								<th>Views</th>
+								<th>Created</th>
+								<th>Expires</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, link := range data.ShareLinks {
+								<tr id={ fmt.Sprintf("share-%d", link.ID) }>
+									<td>
+										<a href={ templ.SafeURL("/wiki/" + link.PageSlug) } class="link">{ link.PageTitle }</a>
+										if link.IncludeChildren {
+											<span class="badge badge-info badge-sm ml-1">+children</span>
+										}
+									</td>
+									<td>
+										@shareStatus(link)
+									</td>
+									<td>
+										{ fmt.Sprintf("%d", link.ViewCount) }
+										if link.MaxViews != nil {
+											<span class="text-muted">/ { fmt.Sprintf("%d", *link.MaxViews) }</span>
+										}
+									</td>
+									<td class="text-muted">{ formatRelativeTimeShort(link.CreatedAt) }</td>
+									<td class="text-muted">
+										if link.ExpiresAt != nil {
+											if link.IsExpired() {
+												<span class="text-error">Expired</span>
+											} else {
+												{ formatRelativeTimeShort(*link.ExpiresAt) }
+											}
+										} else {
+											Never
+										}
+									</td>
+									<td class="table-actions">
+										<a href={ templ.SafeURL(fmt.Sprintf("/shares/%d", link.ID)) } class="btn btn-ghost btn-sm" title="View stats">
+											@components.IconChart("sm")
+										</a>
+										if !link.IsRevoked {
+											<button
+												type="button"
+												class="btn btn-ghost btn-sm"
+												title="Revoke"
+												hx-post={ fmt.Sprintf("/shares/%d/revoke", link.ID) }
+												hx-target={ fmt.Sprintf("#share-status-%d", link.ID) }
+												hx-swap="outerHTML"
+												hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
+											>
+												@components.IconBan("sm")
+											</button>
+										}
+										<button
+											type="button"
+											class="btn btn-ghost btn-sm text-error"
+											title="Delete"
+											hx-delete={ fmt.Sprintf("/shares/%d", link.ID) }
+											hx-target={ fmt.Sprintf("#share-%d", link.ID) }
+											hx-swap="delete"
+											hx-confirm="Delete this share link?"
+											hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
+										>
+											@components.IconTrash("sm")
+										</button>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				}
+			</div>
+		</div>
+
+		<!-- Share Modal -->
+		<div id="share-modal" class="modal" style="display: none;">
+			<div class="modal-backdrop" onclick="closeShareModal()"></div>
+			<div class="modal-content">
+				<div id="share-modal-body"></div>
+			</div>
+		</div>
+
+		<script>
+			function showPageDropdown() {
+				document.getElementById('page-dropdown').classList.add('active');
+			}
+
+			function filterPages(query) {
+				const dropdown = document.getElementById('page-dropdown');
+				const items = dropdown.querySelectorAll('.page-selector-item');
+				const q = query.toLowerCase();
+				items.forEach(item => {
+					const title = item.querySelector('.page-selector-item-title').textContent.toLowerCase();
+					const path = item.querySelector('.page-selector-item-path').textContent.toLowerCase();
+					item.style.display = (title.includes(q) || path.includes(q)) ? '' : 'none';
+				});
+				dropdown.classList.add('active');
+			}
+
+			function selectPageAndOpenModal(el) {
+				document.getElementById('page-search').value = el.dataset.pageTitle;
+				document.getElementById('page-dropdown').classList.remove('active');
+				openShareModal(el.dataset.pageId);
+			}
+
+			document.addEventListener('click', e => {
+				const sel = document.querySelector('.page-selector');
+				if (sel && !sel.contains(e.target)) {
+					document.getElementById('page-dropdown').classList.remove('active');
+				}
+			});
+		</script>
+	}
+}
+
+templ shareStatus(link models.ShareLink) {
+	<span id={ fmt.Sprintf("share-status-%d", link.ID) }>
+		if link.IsRevoked {
+			<span class="badge badge-error">Revoked</span>
+		} else if link.IsExpired() {
+			<span class="badge badge-warning">Expired</span>
+		} else if link.IsViewLimitReached() {
+			<span class="badge badge-warning">Limit reached</span>
+		} else {
+			<span class="badge badge-success">Active</span>
+		}
+	</span>
+}
+
+// CreateShareFormData contains data for the create share form.
+type CreateShareFormData struct {
+	layouts.PageData
+	Page *models.Page
+}
+
+// CreateShareForm renders the share creation form (HTMX modal content).
+templ CreateShareForm(data CreateShareFormData) {
+	<div class="modal-header">
+		<h2 class="modal-title">Create Share Link</h2>
+		<button type="button" class="icon-btn modal-close" onclick="closeShareModal()">
+			@components.IconClose("sm")
+		</button>
+	</div>
+	<form method="POST" action="/shares" hx-post="/shares" hx-target="#share-modal-body" hx-swap="innerHTML">
+		<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+		<input type="hidden" name="page_id" value={ fmt.Sprintf("%d", data.Page.ID) }/>
+
+		<div class="form-group">
+			<label class="form-label">Page</label>
+			<div class="form-static">{ data.Page.Title }</div>
+		</div>
+
+		<div class="form-group">
+			<label class="checkbox-item">
+				<input type="checkbox" name="include_children" class="form-checkbox"/>
+				<span>Include child pages</span>
+			</label>
+			<p class="form-hint">Allow access to all pages under this one</p>
+		</div>
+
+		<div class="form-group">
+			<label class="form-label" for="max_views">View limit (optional)</label>
+			<input type="number" id="max_views" name="max_views" class="form-input" min="1" placeholder="Unlimited"/>
+			<p class="form-hint">Maximum number of times this link can be viewed</p>
+		</div>
+
+		<div class="form-group">
+			<label class="form-label" for="max_ips">IP limit (optional)</label>
+			<input type="number" id="max_ips" name="max_ips" class="form-input" min="1" placeholder="Unlimited"/>
+			<p class="form-hint">Maximum number of unique IP addresses</p>
+		</div>
+
+		<div class="form-group">
+			<label class="form-label" for="expires_in">Expires in (optional)</label>
+			<select id="expires_in" name="expires_in" class="form-select">
+				<option value="">Never</option>
+				<option value="1h">1 hour</option>
+				<option value="24h">24 hours</option>
+				<option value="168h">7 days</option>
+				<option value="720h">30 days</option>
+				<option value="2160h">90 days</option>
+			</select>
+		</div>
+
+		<div class="modal-actions">
+			<button type="button" class="btn btn-ghost" onclick="closeShareModal()">
+				Cancel
+			</button>
+			<button type="submit" class="btn btn-primary">
+				@components.IconShare("sm")
+				Create Share Link
+			</button>
+		</div>
+	</form>
+}
+
+// ShareStatsData contains data for the share stats page.
+type ShareStatsData struct {
+	layouts.PageData
+	ShareLink *models.ShareLink
+	Accesses  []models.ShareLinkAccess
+	SiteURL   string
+}
+
+// ShareStats renders the share link statistics page.
+templ ShareStats(data ShareStatsData) {
+	@layouts.Base(data.PageData) {
+		<div class="page-header">
+			<div class="page-header-top">
+				<a href="/shares" class="btn btn-ghost btn-sm">
+					@components.IconArrowLeft("sm")
+					Back to Shares
+				</a>
+			</div>
+			<h1 class="page-title">Share Link Statistics</h1>
+		</div>
+
+		<!-- Share Info -->
+		<div class="card mb-6">
+			<div class="card-header">
+				<h2 class="card-title">Share Details</h2>
+				@shareStatus(*data.ShareLink)
+			</div>
+			<div class="card-body">
+				<dl class="detail-list">
+					<div class="detail-item">
+						<dt>Page</dt>
+						<dd><a href={ templ.SafeURL("/wiki/" + data.ShareLink.PageSlug) }>{ data.ShareLink.PageTitle }</a></dd>
+					</div>
+					<div class="detail-item">
+						<dt>Include Children</dt>
+						<dd>{ boolToYesNo(data.ShareLink.IncludeChildren) }</dd>
+					</div>
+					<div class="detail-item">
+						<dt>Created</dt>
+						<dd>{ data.ShareLink.CreatedAt.Format("Jan 2, 2006 at 3:04 PM") }</dd>
+					</div>
+					<div class="detail-item">
+						<dt>Created By</dt>
+						<dd>{ data.ShareLink.CreatorUsername }</dd>
+					</div>
+					<div class="detail-item">
+						<dt>Total Views</dt>
+						<dd>
+							{ fmt.Sprintf("%d", data.ShareLink.ViewCount) }
+							if data.ShareLink.MaxViews != nil {
+								<span class="text-muted"> / { fmt.Sprintf("%d", *data.ShareLink.MaxViews) }</span>
+							}
+						</dd>
+					</div>
+					<div class="detail-item">
+						<dt>Unique IPs</dt>
+						<dd>
+							{ fmt.Sprintf("%d", data.ShareLink.UniqueIPs) }
+							if data.ShareLink.MaxIPs != nil {
+								<span class="text-muted"> / { fmt.Sprintf("%d", *data.ShareLink.MaxIPs) }</span>
+							}
+						</dd>
+					</div>
+					if data.ShareLink.ExpiresAt != nil {
+						<div class="detail-item">
+							<dt>Expires</dt>
+							<dd>
+								{ data.ShareLink.ExpiresAt.Format("Jan 2, 2006 at 3:04 PM") }
+								if data.ShareLink.IsExpired() {
+									<span class="badge badge-error badge-sm ml-2">Expired</span>
+								}
+							</dd>
+						</div>
+					}
+				</dl>
+			</div>
+		</div>
+
+		<!-- Access Log -->
+		<div class="card">
+			<div class="card-header">
+				<h2 class="card-title">Access Log</h2>
+			</div>
+			if len(data.Accesses) == 0 {
+				<div class="empty-state">
+					@components.IconEye("lg")
+					<h3 class="empty-state-title">No access yet</h3>
+					<p class="empty-state-text">This share link hasn't been accessed yet.</p>
+				</div>
+			} else {
+				<div class="table-container">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Time</th>
+								<th>IP Address</th>
+								<th>User Agent</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, access := range data.Accesses {
+								<tr>
+									<td>{ access.AccessedAt.Format("Jan 2, 2006 3:04 PM") }</td>
+									<td><code>{ access.IPAddress }</code></td>
+									<td class="truncate max-w-xs" title={ access.UserAgent }>{ truncateUA(access.UserAgent) }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		</div>
+	}
+}
+
+// SharedPageData contains data for the shared page view.
+type SharedPageData struct {
+	Page            *models.Page
+	ShareToken      string
+	IncludeChildren bool
+	ChildPages      []models.PageSummary
+	TOC             []services.TOCEntry
+	SiteName        string
+	SiteURL         string
+	ParentSlug      string
+}
+
+// SharedPage renders a page accessed via share link.
+templ SharedPage(data SharedPageData) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta name="robots" content="noindex, nofollow"/>
+		<title>{ data.Page.Title } | { data.SiteName }</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com"/>
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+		<link rel="stylesheet" href="/static/css/output.css"/>
+		<link rel="stylesheet" href="/static/css/highlight.css"/>
+		<script src="/static/js/highlight.min.js" defer></script>
+		<script defer>
+			document.addEventListener('DOMContentLoaded', function() { hljs.highlightAll(); });
+		</script>
+		<script>
+			if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+				document.documentElement.setAttribute('data-theme', 'dark');
+			}
+		</script>
+	</head>
+	<body>
+		<div class="shared-page-layout">
+			<header class="shared-header">
+				<div class="shared-header-inner">
+					<div class="shared-header-title">
+						<span class="shared-badge">Shared Page</span>
+						<span class="shared-site">{ data.SiteName }</span>
+					</div>
+					<button
+						class="icon-btn"
+						onclick="const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', t); localStorage.setItem('theme', t);"
+						title="Toggle theme"
+					>
+						<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+						</svg>
+					</button>
+				</div>
+			</header>
+
+			<main class="shared-main">
+				<div class="shared-container">
+					<!-- Page Content -->
+					<article class="shared-article">
+						<h1 class="shared-page-title">{ data.Page.Title }</h1>
+
+						if len(data.TOC) > 0 {
+							<nav class="shared-toc">
+								<h2 class="shared-toc-title">Contents</h2>
+								<ul class="shared-toc-list">
+									for _, entry := range data.TOC {
+										<li class={ "shared-toc-item", templ.KV("shared-toc-indent", entry.Level > 2) }>
+											<a href={ templ.SafeURL("#" + entry.ID) }>{ entry.Text }</a>
+										</li>
+									}
+								</ul>
+							</nav>
+						}
+
+						<div class="prose">
+							@templ.Raw(data.Page.ContentHTML)
+						</div>
+					</article>
+
+					<!-- Child Pages -->
+					if data.IncludeChildren && len(data.ChildPages) > 0 {
+						<div class="shared-children">
+							<h2 class="shared-children-title">Pages in this section</h2>
+							<div class="shared-children-grid">
+								for _, child := range data.ChildPages {
+									<a href={ templ.SafeURL(fmt.Sprintf("/s/%s/%s", data.ShareToken, child.Slug)) } class="shared-child-card">
+										<div class="shared-child-icon">
+											@components.IconDocument("container")
+										</div>
+										<div class="shared-child-content">
+											<h3>{ child.Title }</h3>
+											if child.Excerpt != "" {
+												<p>{ child.Excerpt }</p>
+											}
+										</div>
+									</a>
+								}
+							</div>
+						</div>
+					}
+				</div>
+			</main>
+
+			<footer class="shared-footer">
+				<div class="shared-footer-inner">
+					<p>Shared via <a href={ templ.SafeURL(data.SiteURL) }>{ data.SiteName }</a></p>
+				</div>
+			</footer>
+		</div>
+	</body>
+	</html>
+}
+
+// SharedErrorData contains data for shared page errors.
+type SharedErrorData struct {
+	Title    string
+	Message  string
+	SiteName string
+}
+
+// SharedError renders an error page for shared access.
+templ SharedError(data SharedErrorData) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta name="robots" content="noindex, nofollow"/>
+		<title>{ data.Title } | { data.SiteName }</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com"/>
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+		<link rel="stylesheet" href="/static/css/output.css"/>
+		<script>
+			if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+				document.documentElement.setAttribute('data-theme', 'dark');
+			}
+		</script>
+	</head>
+	<body>
+		<div class="shared-page-layout">
+			<header class="shared-header">
+				<div class="shared-header-inner">
+					<div class="shared-header-title">
+						<span class="shared-site">{ data.SiteName }</span>
+					</div>
+				</div>
+			</header>
+
+			<main class="shared-main">
+				<div class="shared-container">
+					<div class="shared-error">
+						<div class="shared-error-icon">
+							@components.IconWarning("xl")
+						</div>
+						<h1 class="shared-error-title">{ data.Title }</h1>
+						<p class="shared-error-message">{ data.Message }</p>
+					</div>
+				</div>
+			</main>
+
+			<footer class="shared-footer">
+				<div class="shared-footer-inner">
+					<p>{ data.SiteName }</p>
+				</div>
+			</footer>
+		</div>
+	</body>
+	</html>
+}
+
+// Helper functions
+
+func formatRelativeTimeShort(t time.Time) string {
+	now := time.Now()
+	diff := now.Sub(t)
+
+	if diff < 0 {
+		// Future time
+		diff = -diff
+		switch {
+		case diff < time.Hour:
+			return fmt.Sprintf("in %dm", int(diff.Minutes()))
+		case diff < 24*time.Hour:
+			return fmt.Sprintf("in %dh", int(diff.Hours()))
+		case diff < 7*24*time.Hour:
+			return fmt.Sprintf("in %dd", int(diff.Hours()/24))
+		default:
+			return t.Format("Jan 2")
+		}
+	}
+
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		return fmt.Sprintf("%dm ago", int(diff.Minutes()))
+	case diff < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(diff.Hours()))
+	case diff < 7*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(diff.Hours()/24))
+	default:
+		return t.Format("Jan 2")
+	}
+}
+
+func boolToYesNo(b bool) string {
+	if b {
+		return "Yes"
+	}
+	return "No"
+}
+
+func truncateUA(ua string) string {
+	if len(ua) > 60 {
+		return ua[:60] + "..."
+	}
+	return ua
+}

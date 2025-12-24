@@ -230,13 +230,27 @@ func CanAdmin(c echo.Context) bool {
 }
 
 // RequireAuthIfPrivate middleware requires authentication if the wiki is set to private mode.
+// It allows access if a valid share token is present that grants access to the requested page.
 func RequireAuthIfPrivate(cfg *config.Config) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			if cfg.Site.RequireAuth && GetUser(c) == nil {
-				return redirectToLogin(c)
+			// If user is authenticated, allow access
+			if GetUser(c) != nil {
+				return next(c)
 			}
-			return next(c)
+
+			// If wiki is not private, allow access
+			if !cfg.Site.RequireAuth {
+				return next(c)
+			}
+
+			// Check for valid share token access
+			if HasValidShareAccess(c) {
+				return next(c)
+			}
+
+			// No valid access, redirect to login
+			return redirectToLogin(c)
 		}
 	}
 }

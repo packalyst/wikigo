@@ -553,6 +553,32 @@ func (db *DB) GetRootPages(ctx context.Context) ([]models.PageSummary, error) {
 	return pages, rows.Err()
 }
 
+// GetAllPageSummaries returns a summary of all pages for selection purposes.
+func (db *DB) GetAllPageSummaries(ctx context.Context) ([]models.PageSummary, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT p.id, p.slug, p.title, '', p.parent_id, p.updated_at, u.username
+		FROM pages p
+		JOIN users u ON p.author_id = u.id
+		ORDER BY p.title ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all pages: %w", err)
+	}
+	defer rows.Close()
+
+	var pages []models.PageSummary
+	for rows.Next() {
+		var p models.PageSummary
+		var excerpt string
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &excerpt, &p.ParentID, &p.UpdatedAt, &p.Author); err != nil {
+			return nil, fmt.Errorf("failed to scan page: %w", err)
+		}
+		pages = append(pages, p)
+	}
+
+	return pages, rows.Err()
+}
+
 // Revision queries
 
 // CreateRevision saves a page revision.
@@ -1157,4 +1183,278 @@ func (db *DB) GetAllSettings(ctx context.Context) (map[string]string, error) {
 	}
 
 	return settings, rows.Err()
+}
+
+// Share Link queries
+
+// CreateShareLink inserts a new share link.
+func (db *DB) CreateShareLink(ctx context.Context, link *models.ShareLink) error {
+	link.CreatedAt = time.Now().UTC()
+
+	result, err := db.ExecContext(ctx, `
+		INSERT INTO share_links (token_hash, page_id, created_by, include_children, max_views, max_ips, expires_at, is_revoked, view_count, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, link.TokenHash, link.PageID, link.CreatedBy, link.IncludeChildren, link.MaxViews, link.MaxIPs, link.ExpiresAt, link.IsRevoked, link.ViewCount, link.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to create share link: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to get share link ID: %w", err)
+	}
+
+	link.ID = id
+	return nil
+}
+
+// GetShareLinkByToken retrieves a share link by its token hash.
+func (db *DB) GetShareLinkByToken(ctx context.Context, tokenHash string) (*models.ShareLink, error) {
+	link := &models.ShareLink{}
+	err := db.QueryRowContext(ctx, `
+		SELECT sl.id, sl.token_hash, sl.page_id, sl.created_by, sl.include_children,
+		       sl.max_views, sl.max_ips, sl.expires_at, sl.is_revoked, sl.view_count, sl.created_at,
+		       p.title, p.slug, u.username
+		FROM share_links sl
+		JOIN pages p ON sl.page_id = p.id
+		JOIN users u ON sl.created_by = u.id
+		WHERE sl.token_hash = ?
+	`, tokenHash).Scan(
+		&link.ID, &link.TokenHash, &link.PageID, &link.CreatedBy, &link.IncludeChildren,
+		&link.MaxViews, &link.MaxIPs, &link.ExpiresAt, &link.IsRevoked, &link.ViewCount, &link.CreatedAt,
+		&link.PageTitle, &link.PageSlug, &link.CreatorUsername,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get share link: %w", err)
+	}
+	return link, nil
+}
+
+// GetShareLinkByID retrieves a share link by ID.
+func (db *DB) GetShareLinkByID(ctx context.Context, id int64) (*models.ShareLink, error) {
+	link := &models.ShareLink{}
+	err := db.QueryRowContext(ctx, `
+		SELECT sl.id, sl.token_hash, sl.page_id, sl.created_by, sl.include_children,
+		       sl.max_views, sl.max_ips, sl.expires_at, sl.is_revoked, sl.view_count, sl.created_at,
+		       p.title, p.slug, u.username
+		FROM share_links sl
+		JOIN pages p ON sl.page_id = p.id
+		JOIN users u ON sl.created_by = u.id
+		WHERE sl.id = ?
+	`, id).Scan(
+		&link.ID, &link.TokenHash, &link.PageID, &link.CreatedBy, &link.IncludeChildren,
+		&link.MaxViews, &link.MaxIPs, &link.ExpiresAt, &link.IsRevoked, &link.ViewCount, &link.CreatedAt,
+		&link.PageTitle, &link.PageSlug, &link.CreatorUsername,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get share link: %w", err)
+	}
+
+	// Get unique IP count
+	uniqueIPs, err := db.GetShareLinkUniqueIPCount(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	link.UniqueIPs = uniqueIPs
+
+	return link, nil
+}
+
+// GetShareLinksByPage retrieves all share links for a specific page.
+func (db *DB) GetShareLinksByPage(ctx context.Context, pageID int64) ([]models.ShareLink, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT sl.id, sl.token_hash, sl.page_id, sl.created_by, sl.include_children,
+		       sl.max_views, sl.max_ips, sl.expires_at, sl.is_revoked, sl.view_count, sl.created_at,
+		       p.title, p.slug, u.username
+		FROM share_links sl
+		JOIN pages p ON sl.page_id = p.id
+		JOIN users u ON sl.created_by = u.id
+		WHERE sl.page_id = ?
+		ORDER BY sl.created_at DESC
+	`, pageID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get share links: %w", err)
+	}
+	defer rows.Close()
+
+	return db.scanShareLinks(ctx, rows)
+}
+
+// GetShareLinksByUser retrieves all share links created by a specific user.
+func (db *DB) GetShareLinksByUser(ctx context.Context, userID int64) ([]models.ShareLink, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT sl.id, sl.token_hash, sl.page_id, sl.created_by, sl.include_children,
+		       sl.max_views, sl.max_ips, sl.expires_at, sl.is_revoked, sl.view_count, sl.created_at,
+		       p.title, p.slug, u.username
+		FROM share_links sl
+		JOIN pages p ON sl.page_id = p.id
+		JOIN users u ON sl.created_by = u.id
+		WHERE sl.created_by = ?
+		ORDER BY sl.created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get share links: %w", err)
+	}
+	defer rows.Close()
+
+	return db.scanShareLinks(ctx, rows)
+}
+
+// ListAllShareLinks retrieves all share links (admin view).
+func (db *DB) ListAllShareLinks(ctx context.Context, limit, offset int) ([]models.ShareLink, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT sl.id, sl.token_hash, sl.page_id, sl.created_by, sl.include_children,
+		       sl.max_views, sl.max_ips, sl.expires_at, sl.is_revoked, sl.view_count, sl.created_at,
+		       p.title, p.slug, u.username
+		FROM share_links sl
+		JOIN pages p ON sl.page_id = p.id
+		JOIN users u ON sl.created_by = u.id
+		ORDER BY sl.created_at DESC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list share links: %w", err)
+	}
+	defer rows.Close()
+
+	return db.scanShareLinks(ctx, rows)
+}
+
+// scanShareLinks is a helper to scan share link rows.
+func (db *DB) scanShareLinks(ctx context.Context, rows *sql.Rows) ([]models.ShareLink, error) {
+	var links []models.ShareLink
+	for rows.Next() {
+		var link models.ShareLink
+		if err := rows.Scan(
+			&link.ID, &link.TokenHash, &link.PageID, &link.CreatedBy, &link.IncludeChildren,
+			&link.MaxViews, &link.MaxIPs, &link.ExpiresAt, &link.IsRevoked, &link.ViewCount, &link.CreatedAt,
+			&link.PageTitle, &link.PageSlug, &link.CreatorUsername,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan share link: %w", err)
+		}
+		links = append(links, link)
+	}
+
+	// Fetch unique IP counts for all links
+	for i := range links {
+		count, err := db.GetShareLinkUniqueIPCount(ctx, links[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		links[i].UniqueIPs = count
+	}
+
+	return links, rows.Err()
+}
+
+// IncrementShareLinkViewCount atomically increments the view count.
+func (db *DB) IncrementShareLinkViewCount(ctx context.Context, linkID int64) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE share_links SET view_count = view_count + 1 WHERE id = ?
+	`, linkID)
+	return err
+}
+
+// RevokeShareLink marks a share link as revoked.
+func (db *DB) RevokeShareLink(ctx context.Context, linkID int64) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE share_links SET is_revoked = 1 WHERE id = ?
+	`, linkID)
+	return err
+}
+
+// DeleteShareLink removes a share link and its access records.
+func (db *DB) DeleteShareLink(ctx context.Context, linkID int64) error {
+	// Access records are deleted automatically via ON DELETE CASCADE
+	_, err := db.ExecContext(ctx, "DELETE FROM share_links WHERE id = ?", linkID)
+	return err
+}
+
+// RecordShareAccess logs an access to a share link.
+func (db *DB) RecordShareAccess(ctx context.Context, access *models.ShareLinkAccess) error {
+	access.AccessedAt = time.Now().UTC()
+
+	result, err := db.ExecContext(ctx, `
+		INSERT INTO share_link_access (share_link_id, ip_address, user_agent, accessed_at)
+		VALUES (?, ?, ?, ?)
+	`, access.ShareLinkID, access.IPAddress, access.UserAgent, access.AccessedAt)
+	if err != nil {
+		return fmt.Errorf("failed to record share access: %w", err)
+	}
+
+	id, _ := result.LastInsertId()
+	access.ID = id
+	return nil
+}
+
+// GetShareLinkUniqueIPCount returns the count of unique IPs that accessed a share link.
+func (db *DB) GetShareLinkUniqueIPCount(ctx context.Context, linkID int64) (int, error) {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT ip_address) FROM share_link_access WHERE share_link_id = ?
+	`, linkID).Scan(&count)
+	return count, err
+}
+
+// HasIPAccessedShareLink checks if a specific IP has already accessed a share link.
+func (db *DB) HasIPAccessedShareLink(ctx context.Context, linkID int64, ipAddress string) (bool, error) {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM share_link_access WHERE share_link_id = ? AND ip_address = ?
+	`, linkID, ipAddress).Scan(&count)
+	return count > 0, err
+}
+
+// GetShareLinkAccesses retrieves access records for a share link (for stats view).
+func (db *DB) GetShareLinkAccesses(ctx context.Context, linkID int64, limit, offset int) ([]models.ShareLinkAccess, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT id, share_link_id, ip_address, user_agent, accessed_at
+		FROM share_link_access
+		WHERE share_link_id = ?
+		ORDER BY accessed_at DESC
+		LIMIT ? OFFSET ?
+	`, linkID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get share accesses: %w", err)
+	}
+	defer rows.Close()
+
+	var accesses []models.ShareLinkAccess
+	for rows.Next() {
+		var a models.ShareLinkAccess
+		if err := rows.Scan(&a.ID, &a.ShareLinkID, &a.IPAddress, &a.UserAgent, &a.AccessedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan share access: %w", err)
+		}
+		accesses = append(accesses, a)
+	}
+
+	return accesses, rows.Err()
+}
+
+// CountShareLinks returns the total number of share links.
+func (db *DB) CountShareLinks(ctx context.Context) (int, error) {
+	var count int
+	err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM share_links").Scan(&count)
+	return count, err
+}
+
+// IsPageDescendant checks if childSlug is a descendant of the page with parentID.
+func (db *DB) IsPageDescendant(ctx context.Context, parentID int64, childSlug string) (bool, error) {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		WITH RECURSIVE descendants AS (
+			SELECT id, slug FROM pages WHERE parent_id = ?
+			UNION ALL
+			SELECT p.id, p.slug FROM pages p
+			JOIN descendants d ON p.parent_id = d.id
+		)
+		SELECT COUNT(*) FROM descendants WHERE slug = ? COLLATE NOCASE
+	`, parentID, childSlug).Scan(&count)
+	return count > 0, err
 }

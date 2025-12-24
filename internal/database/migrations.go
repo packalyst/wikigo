@@ -219,6 +219,45 @@ var migrations = []Migration{
 			CREATE INDEX IF NOT EXISTS idx_pages_parent ON pages(parent_id);
 		`,
 	},
+	{
+		Version:     12,
+		Description: "Create share_links table for page sharing",
+		SQL: `
+			CREATE TABLE IF NOT EXISTS share_links (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				token_hash TEXT NOT NULL UNIQUE,
+				page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+				created_by INTEGER NOT NULL REFERENCES users(id),
+				include_children INTEGER NOT NULL DEFAULT 0,
+				max_views INTEGER,
+				max_ips INTEGER,
+				expires_at DATETIME,
+				is_revoked INTEGER NOT NULL DEFAULT 0,
+				view_count INTEGER NOT NULL DEFAULT 0,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_share_links_token ON share_links(token_hash);
+			CREATE INDEX IF NOT EXISTS idx_share_links_page ON share_links(page_id);
+			CREATE INDEX IF NOT EXISTS idx_share_links_creator ON share_links(created_by);
+		`,
+	},
+	{
+		Version:     13,
+		Description: "Create share_link_access table for access tracking",
+		SQL: `
+			CREATE TABLE IF NOT EXISTS share_link_access (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				share_link_id INTEGER NOT NULL REFERENCES share_links(id) ON DELETE CASCADE,
+				ip_address TEXT NOT NULL,
+				user_agent TEXT,
+				accessed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_share_access_link ON share_link_access(share_link_id);
+			CREATE INDEX IF NOT EXISTS idx_share_access_ip ON share_link_access(share_link_id, ip_address);
+		`,
+	},
 }
 
 // Migrate runs all pending migrations.

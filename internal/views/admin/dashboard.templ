@@ -55,169 +55,168 @@ templ Dashboard(data DashboardData) {
 			</div>
 		</div>
 
-		<!-- Main Content Grid -->
-		<div class="admin-grid">
-			<!-- Users Section -->
-			<div class="admin-main">
-				<div class="card">
-					<div class="card-header">
-						<h2 class="card-title">Users</h2>
-						<button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('create_user_modal').showModal()">
-							@components.IconPlus("sm")
-							Add User
-						</button>
+		<!-- Settings Row: 3 columns on desktop -->
+		<div class="admin-cards-row mb-6">
+			<!-- Settings -->
+			<div class="card">
+				<div class="card-header">
+					<h2 class="card-title">Settings</h2>
+				</div>
+				<form hx-post="/admin/settings" hx-swap="none" class="card-body">
+					<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+
+					<div class="form-group">
+						<label class="form-label" for="site_name">Site Name</label>
+						<input type="text" id="site_name" name="site_name" value={ data.Settings.SiteName } class="form-input"/>
 					</div>
-					<div class="card-body p-0">
-						<div class="data-list">
-							for _, user := range data.Users {
-								<div class="data-list-item" id={ "user-" + intToStr64(user.ID) }>
-									<div class="user-avatar">{ string(user.Username[0]) }</div>
-									<div class="data-list-content">
-										<div class="data-list-title">{ user.Username }</div>
-										<div class="data-list-meta">{ user.Email }</div>
-									</div>
-									<div class="flex-center gap-2">
-										@RoleBadge(user.Role)
-										if user.IsActive {
-											<span class="tag badge-success">Active</span>
-										} else {
-											<span class="tag badge-error">Inactive</span>
-										}
-									</div>
-									<div class="flex-center gap-1">
-										<button
-											type="button"
-											class="icon-btn edit-user-btn"
-											data-id={ intToStr64(user.ID) }
-											data-email={ user.Email }
-											data-role={ string(user.Role) }
-											data-active={ boolToStr(user.IsActive) }
-											title="Edit"
-										>
-											@components.IconEdit("")
-										</button>
-										if user.Role != models.RoleAdmin {
-											<button
-												type="button"
-												class="icon-btn icon-btn-danger"
-												onclick={ showDeleteUserModal(intToStr64(user.ID), user.Username) }
-												title="Delete"
-											>
-												@components.IconTrash("")
-											</button>
-										}
-									</div>
-								</div>
-							}
+
+					<div class="form-group flex-between">
+						<div>
+							<label class="form-label mb-0">Allow Registration</label>
+							<p class="form-hint mb-0">Let new users create accounts</p>
 						</div>
+						<input
+							type="checkbox"
+							id="allow_registration"
+							name="allow_registration"
+							value="true"
+							if data.Settings.AllowRegistration {
+								checked
+							}
+							class="form-checkbox"
+						/>
 					</div>
+
+					<div class="form-group flex-between">
+						<div>
+							<label class="form-label mb-0">Private Wiki</label>
+							<p class="form-hint mb-0">Require login to view pages</p>
+						</div>
+						<input
+							type="checkbox"
+							id="require_auth"
+							name="require_auth"
+							value="true"
+							if data.Settings.RequireAuth {
+								checked
+							}
+							class="form-checkbox"
+						/>
+					</div>
+
+					<div class="form-group">
+						<label class="form-label" for="default_role">Default Role</label>
+						<select id="default_role" name="default_role" class="form-input">
+							<option value="viewer" selected?={ data.Settings.DefaultRole == "viewer" }>Viewer</option>
+							<option value="editor" selected?={ data.Settings.DefaultRole == "editor" }>Editor</option>
+						</select>
+					</div>
+
+					<button type="submit" class="btn btn-primary w-full">
+						@components.IconSave("sm")
+						Save Settings
+					</button>
+				</form>
+			</div>
+
+			<!-- Quick Actions -->
+			<div class="card">
+				<div class="card-header">
+					<h3 class="card-title">Quick Actions</h3>
+				</div>
+				<div class="card-body p-2">
+					<a href="/new" class="admin-quick-link">
+						@components.IconPlus("")
+						Create New Page
+					</a>
+					<a href="/pages" class="admin-quick-link">
+						@components.IconDocument("")
+						Manage Pages
+					</a>
+					<a href="/tags" class="admin-quick-link">
+						@components.IconTag("")
+						Manage Tags
+					</a>
+					<a href="/shares" class="admin-quick-link">
+						@components.IconShare("")
+						Manage Shares
+					</a>
 				</div>
 			</div>
 
-			<!-- Settings Section -->
-			<div class="admin-sidebar">
-				<!-- Quick Settings -->
-				<div class="card">
-					<div class="card-header">
-						<h2 class="card-title">Settings</h2>
-					</div>
-					<form hx-post="/admin/settings" hx-swap="none" class="card-body">
-						<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
-
-						<div class="form-group">
-							<label class="form-label" for="site_name">Site Name</label>
-							<input type="text" id="site_name" name="site_name" value={ data.Settings.SiteName } class="form-input"/>
-						</div>
-
-						<div class="form-group flex-between">
-							<div>
-								<label class="form-label mb-0">Allow Registration</label>
-								<p class="form-hint mb-0">Let new users create accounts</p>
-							</div>
-							<input
-								type="checkbox"
-								id="allow_registration"
-								name="allow_registration"
-								value="true"
-								if data.Settings.AllowRegistration {
-									checked
-								}
-								class="form-checkbox"
-							/>
-						</div>
-
-						<div class="form-group flex-between">
-							<div>
-								<label class="form-label mb-0">Private Wiki</label>
-								<p class="form-hint mb-0">Require login to view pages</p>
-							</div>
-							<input
-								type="checkbox"
-								id="require_auth"
-								name="require_auth"
-								value="true"
-								if data.Settings.RequireAuth {
-									checked
-								}
-								class="form-checkbox"
-							/>
-						</div>
-
-						<div class="form-group">
-							<label class="form-label" for="default_role">Default Role</label>
-							<select id="default_role" name="default_role" class="form-input">
-								<option value="viewer" selected?={ data.Settings.DefaultRole == "viewer" }>Viewer</option>
-								<option value="editor" selected?={ data.Settings.DefaultRole == "editor" }>Editor</option>
-							</select>
-						</div>
-
-						<button type="submit" class="btn btn-primary w-full">
-							@components.IconSave("sm")
-							Save Settings
-						</button>
-					</form>
+			<!-- Backup -->
+			<div class="card">
+				<div class="card-header">
+					<h3 class="card-title">Backup</h3>
 				</div>
-
-				<!-- Quick Actions -->
-				<div class="card mt-4">
-					<div class="card-header">
-						<h3 class="card-title">Quick Actions</h3>
-					</div>
-					<div class="card-body p-2">
-						<a href="/new" class="admin-quick-link">
-							@components.IconPlus("")
-							Create New Page
-						</a>
-						<a href="/pages" class="admin-quick-link">
-							@components.IconDocument("")
-							Manage Pages
-						</a>
-						<a href="/tags" class="admin-quick-link">
-							@components.IconTag("")
-							Manage Tags
-						</a>
-					</div>
+				<div class="card-body">
+					<p class="form-hint mb-3">Generate markdown backup files for all wiki pages in the backups folder.</p>
+					<button
+						type="button"
+						class="btn btn-outline w-full"
+						hx-post="/admin/generate-backups"
+						hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
+						hx-swap="none"
+						hx-confirm="This will regenerate all backup files. Continue?"
+					>
+						@components.IconDownload("")
+						Generate All Backups
+					</button>
 				</div>
+			</div>
+		</div>
 
-				<!-- Maintenance -->
-				<div class="card mt-4">
-					<div class="card-header">
-						<h3 class="card-title">Maintenance</h3>
-					</div>
-					<div class="card-body">
-						<p class="form-hint mb-3">Generate markdown backup files for all wiki pages in the backups folder.</p>
-						<button
-							type="button"
-							class="btn btn-outline w-full"
-							hx-post="/admin/generate-backups"
-							hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
-							hx-swap="none"
-							hx-confirm="This will regenerate all backup files. Continue?"
-						>
-							@components.IconDownload("")
-							Generate All Backups
-						</button>
-					</div>
+		<!-- Users Section -->
+		<div class="card">
+			<div class="card-header">
+				<h2 class="card-title">Users</h2>
+				<button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('create_user_modal').showModal()">
+					@components.IconPlus("sm")
+					Add User
+				</button>
+			</div>
+			<div class="card-body p-0">
+				<div class="data-list">
+					for _, user := range data.Users {
+						<div class="data-list-item" id={ "user-" + intToStr64(user.ID) }>
+							<div class="user-avatar">{ string(user.Username[0]) }</div>
+							<div class="data-list-content">
+								<div class="data-list-title">{ user.Username }</div>
+								<div class="data-list-meta">{ user.Email }</div>
+							</div>
+							<div class="flex-center gap-2">
+								@RoleBadge(user.Role)
+								if user.IsActive {
+									<span class="tag badge-success">Active</span>
+								} else {
+									<span class="tag badge-error">Inactive</span>
+								}
+							</div>
+							<div class="flex-center gap-1">
+								<button
+									type="button"
+									class="icon-btn edit-user-btn"
+									data-id={ intToStr64(user.ID) }
+									data-email={ user.Email }
+									data-role={ string(user.Role) }
+									data-active={ boolToStr(user.IsActive) }
+									title="Edit"
+								>
+									@components.IconEdit("")
+								</button>
+								if user.Role != models.RoleAdmin {
+									<button
+										type="button"
+										class="icon-btn icon-btn-danger"
+										onclick={ showDeleteUserModal(intToStr64(user.ID), user.Username) }
+										title="Delete"
+									>
+										@components.IconTrash("")
+									</button>
+								}
+							</div>
+						</div>
+					}
 				</div>
 			</div>
 		</div>

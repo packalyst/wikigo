@@ -423,6 +423,43 @@ templ Base(data PageData) {
 				}
 			});
 		</script>
+
+		<!-- Global Share Modal Functions -->
+		<script>
+			function closeShareModal() {
+				const modal = document.getElementById('share-modal');
+				if (modal) {
+					modal.style.display = 'none';
+					document.body.style.overflow = '';
+				}
+			}
+
+			function openShareModal(pageId) {
+				const modal = document.getElementById('share-modal');
+				const modalBody = document.getElementById('share-modal-body');
+				if (!modal || !modalBody) return;
+
+				modal.style.display = 'flex';
+				modalBody.innerHTML = '<div class="modal-loading">Loading...</div>';
+				document.body.style.overflow = 'hidden';
+
+				fetch('/shares/new/' + pageId)
+					.then(response => {
+						if (!response.ok) throw new Error('Failed to load');
+						return response.text();
+					})
+					.then(html => {
+						modalBody.innerHTML = html;
+						// Process HTMX attributes on injected content
+						if (typeof htmx !== 'undefined') {
+							htmx.process(modalBody);
+						}
+					})
+					.catch(error => {
+						modalBody.innerHTML = '<div class="modal-error">Failed to load share form.</div>';
+					});
+			}
+		</script>
 	</body>
 	</html>
 }
