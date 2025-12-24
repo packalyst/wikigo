@@ -1,0 +1,135 @@
+package components
+
+// FormField renders a text/email/password input with label, error, and hint
+templ FormField(fieldType string, id string, name string, label string, value string, placeholder string, required bool, errMsg string, hint string) {
+	<div class="form-group">
+		<label class="form-label" for={ id }>
+			{ label }
+			if required {
+				<span class="form-required">*</span>
+			}
+		</label>
+		<input
+			type={ fieldType }
+			id={ id }
+			name={ name }
+			value={ value }
+			placeholder={ placeholder }
+			if required {
+				required
+			}
+			class={ "form-input", templ.KV("error", errMsg != "") }
+		/>
+		if errMsg != "" {
+			<p class="form-error">{ errMsg }</p>
+		} else if hint != "" {
+			<p class="form-hint">{ hint }</p>
+		}
+	</div>
+}
+
+// FormTextInput renders a simple text input
+templ FormTextInput(id string, name string, label string, value string, placeholder string, required bool) {
+	@FormField("text", id, name, label, value, placeholder, required, "", "")
+}
+
+// FormEmailInput renders an email input
+templ FormEmailInput(id string, name string, label string, value string, placeholder string, required bool) {
+	@FormField("email", id, name, label, value, placeholder, required, "", "")
+}
+
+// FormPasswordInput renders a password input
+templ FormPasswordInput(id string, name string, label string, placeholder string, required bool, hint string) {
+	@FormField("password", id, name, label, "", placeholder, required, "", hint)
+}
+
+// SelectOption represents an option in a select dropdown
+type SelectOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+// FormSelect renders a select dropdown with label
+templ FormSelect(id string, name string, label string, options []SelectOption, errMsg string) {
+	<div class="form-group">
+		<label class="form-label" for={ id }>{ label }</label>
+		<select id={ id } name={ name } class="form-input">
+			for _, opt := range options {
+				<option value={ opt.Value } selected?={ opt.Selected }>{ opt.Label }</option>
+			}
+		</select>
+		if errMsg != "" {
+			<p class="form-error">{ errMsg }</p>
+		}
+	</div>
+}
+
+// FormCheckbox renders a checkbox with label
+templ FormCheckbox(id string, name string, label string, checked bool, value string) {
+	<div class="form-group form-checkbox-inline">
+		<input
+			type="checkbox"
+			id={ id }
+			name={ name }
+			value={ value }
+			if checked {
+				checked
+			}
+			class="form-checkbox"
+		/>
+		<label for={ id }>{ label }</label>
+	</div>
+}
+
+// FormCheckboxRow renders a checkbox with label and description in a row layout
+templ FormCheckboxRow(id string, name string, label string, description string, checked bool, value string) {
+	<div class="form-group flex-between">
+		<div>
+			<label class="form-label mb-0">{ label }</label>
+			if description != "" {
+				<p class="form-hint mb-0">{ description }</p>
+			}
+		</div>
+		<input
+			type="checkbox"
+			id={ id }
+			name={ name }
+			value={ value }
+			if checked {
+				checked
+			}
+			class="form-checkbox"
+		/>
+	</div>
+}
+
+// FormTextarea renders a textarea with label
+templ FormTextarea(id string, name string, label string, value string, placeholder string, rows int, required bool, errMsg string) {
+	<div class="form-group">
+		<label class="form-label" for={ id }>
+			{ label }
+			if required {
+				<span class="form-required">*</span>
+			}
+		</label>
+		<textarea
+			id={ id }
+			name={ name }
+			placeholder={ placeholder }
+			rows={ intToStr(rows) }
+			if required {
+				required
+			}
+			class={ "form-input form-textarea", templ.KV("error", errMsg != "") }
+		>{ value }</textarea>
+		if errMsg != "" {
+			<p class="form-error">{ errMsg }</p>
+		}
+	</div>
+}
+
+// CSRFInput renders a hidden CSRF token input
+templ CSRFInput(token string) {
+	<input type="hidden" name="csrf_token" value={ token }/>
+}

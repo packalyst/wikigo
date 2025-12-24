@@ -1,0 +1,5 @@
+# JavaScript files
+# Download the following files for production:
+# - htmx.min.js from https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js
+# - alpine.min.js from https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js
+# - highlight.min.js from https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js

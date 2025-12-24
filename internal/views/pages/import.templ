@@ -1,0 +1,223 @@
+package pages
+
+import (
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+// ImportData contains data for the import page.
+type ImportData struct {
+	layouts.PageData
+}
+
+// Import renders the markdown import form.
+templ Import(data ImportData) {
+	@layouts.Base(data.PageData) {
+		<div class="content-main">
+			<div class="page-header">
+				<div class="page-header-top">
+					<h1 class="page-title">Import Markdown</h1>
+					<a href="/pages" class="btn btn-ghost btn-sm">
+						@components.IconX("sm")
+						Cancel
+					</a>
+				</div>
+				<p class="page-description">Upload markdown files to create new wiki pages</p>
+			</div>
+
+			<div class="import-grid">
+			<div class="card">
+				<form action="/import" method="POST" enctype="multipart/form-data" id="import-form">
+					<div class="card-body">
+						<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+
+						<!-- File Input -->
+						<div class="form-group">
+							<label class="form-label">Markdown Files</label>
+							<label for="files" class="file-upload-area" id="drop-zone">
+								<div class="file-upload-content">
+									@components.IconUpload("lg")
+									<p class="file-upload-text">
+										<span class="file-upload-link">Click to upload</span> or drag and drop
+									</p>
+									<p class="file-upload-hint">.md or .markdown files (multiple allowed)</p>
+								</div>
+								<input id="files" name="files" type="file" accept=".md,.markdown" multiple class="hidden"/>
+							</label>
+						</div>
+
+						<!-- Selected Files List -->
+						<div id="file-list" class="file-list hidden">
+							<div class="file-list-header">
+								<span class="file-list-count"></span>
+								<button type="button" class="btn btn-ghost btn-sm" id="clear-files">
+									@components.IconX("sm")
+									Clear all
+								</button>
+							</div>
+							<div class="file-list-items"></div>
+						</div>
+
+						<!-- Frontmatter Info -->
+						@components.Alert(components.AlertInfo, "Supported Frontmatter", "") {
+							<p class="mb-2">Your markdown files can include YAML frontmatter to set page metadata:</p>
+							<pre class="frontmatter-example">---
+title: "Page Title"
+slug: "custom-url-slug"
+tags: [tag1, tag2, tag3]
+---
+
+# Your content here...</pre>
+						}
+					</div>
+
+					<!-- Submit -->
+					<div class="card-footer">
+						<a href="/pages" class="btn btn-ghost">
+							@components.IconX("sm")
+							Cancel
+						</a>
+						<button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+							@components.IconUpload("sm")
+							<span id="submit-text">Import Pages</span>
+						</button>
+					</div>
+				</form>
+			</div>
+
+			<!-- Help Section -->
+			<div class="card card-muted">
+				<div class="card-body">
+					<h3 class="card-title">Import Tips</h3>
+					<ul class="tips-list">
+						<li>
+							@components.IconSuccess("sm")
+							<span>Select multiple files at once or drag and drop a batch</span>
+						</li>
+						<li>
+							@components.IconSuccess("sm")
+							<span>If no title is specified, the first H1 heading or filename will be used</span>
+						</li>
+						<li>
+							@components.IconSuccess("sm")
+							<span>Wiki.js frontmatter (title, description, tags, date) is also supported</span>
+						</li>
+					</ul>
+				</div>
+			</div>
+			</div>
+		</div>
+
+		<script>
+			const fileInput = document.getElementById('files');
+			const fileList = document.getElementById('file-list');
+			const fileListItems = fileList.querySelector('.file-list-items');
+			const fileListCount = fileList.querySelector('.file-list-count');
+			const clearBtn = document.getElementById('clear-files');
+			const submitBtn = document.getElementById('submit-btn');
+			const submitText = document.getElementById('submit-text');
+			const dropZone = document.getElementById('drop-zone');
+
+			let selectedFiles = new DataTransfer();
+
+			function updateFileList() {
+				const files = selectedFiles.files;
+				if (files.length === 0) {
+					fileList.classList.add('hidden');
+					submitBtn.disabled = true;
+					submitText.textContent = 'Import Pages';
+					return;
+				}
+
+				fileList.classList.remove('hidden');
+				submitBtn.disabled = false;
+				fileListCount.textContent = `${files.length} file${files.length > 1 ? 's' : ''} selected`;
+				submitText.textContent = `Import ${files.length} Page${files.length > 1 ? 's' : ''}`;
+
+				fileListItems.innerHTML = '';
+				for (let i = 0; i < files.length; i++) {
+					const file = files[i];
+					const item = document.createElement('div');
+					item.className = 'file-list-item';
+					item.innerHTML = `
+						<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+						</svg>
+						<span class="file-name">${file.name}</span>
+						<span class="file-size">${formatFileSize(file.size)}</span>
+						<button type="button" class="file-remove" data-index="${i}">
+							<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+							</svg>
+						</button>
+					`;
+					fileListItems.appendChild(item);
+				}
+
+				// Update the actual file input
+				fileInput.files = selectedFiles.files;
+			}
+
+			function formatFileSize(bytes) {
+				if (bytes < 1024) return bytes + ' B';
+				if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+				return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+			}
+
+			fileInput.addEventListener('change', function(e) {
+				for (const file of e.target.files) {
+					selectedFiles.items.add(file);
+				}
+				updateFileList();
+			});
+
+			clearBtn.addEventListener('click', function() {
+				selectedFiles = new DataTransfer();
+				updateFileList();
+			});
+
+			fileListItems.addEventListener('click', function(e) {
+				const removeBtn = e.target.closest('.file-remove');
+				if (removeBtn) {
+					const index = parseInt(removeBtn.dataset.index);
+					const newFiles = new DataTransfer();
+					for (let i = 0; i < selectedFiles.files.length; i++) {
+						if (i !== index) {
+							newFiles.items.add(selectedFiles.files[i]);
+						}
+					}
+					selectedFiles = newFiles;
+					updateFileList();
+				}
+			});
+
+			// Drag and drop
+			['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+				dropZone.addEventListener(eventName, preventDefaults, false);
+			});
+
+			function preventDefaults(e) {
+				e.preventDefault();
+				e.stopPropagation();
+			}
+
+			['dragenter', 'dragover'].forEach(eventName => {
+				dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
+			});
+
+			['dragleave', 'drop'].forEach(eventName => {
+				dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
+			});
+
+			dropZone.addEventListener('drop', function(e) {
+				const files = e.dataTransfer.files;
+				for (const file of files) {
+					if (file.name.match(/\.(md|markdown)$/i)) {
+						selectedFiles.items.add(file);
+					}
+				}
+				updateFileList();
+			});
+		</script>
+	}
+}

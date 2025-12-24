@@ -1,0 +1,123 @@
+package pages
+
+import (
+	"fmt"
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+type ListData struct {
+	layouts.PageData
+	Pages      []models.PageSummary
+	TotalPages int
+	Page       int
+	PerPage    int
+	Tag        string
+}
+
+templ List(data ListData) {
+	@layouts.Base(data.PageData) {
+		<div class="list-header">
+			<div class="list-header-left">
+				<h1 class="list-title">
+					if data.Tag != "" {
+						Pages tagged "{ data.Tag }"
+					} else {
+						All Pages
+					}
+				</h1>
+				<span class="list-count">{ intToStr(data.TotalPages) } pages</span>
+			</div>
+			if data.User != nil && data.User.Role.CanEdit() {
+				<a href="/new" class="btn btn-ghost btn-sm">
+					@components.IconPlus("sm")
+					New
+				</a>
+			}
+		</div>
+		<div class="list-divider"></div>
+
+		if len(data.Pages) == 0 {
+			<div class="card">
+				<div class="empty-state">
+					<span class="empty-state-icon">
+						@components.IconDocument("container")
+					</span>
+					<h3 class="empty-state-title">No pages found</h3>
+					<p class="empty-state-text">
+						if data.Tag != "" {
+							No pages with this tag yet.
+						} else {
+							Get started by creating a new page.
+						}
+					</p>
+					if data.User != nil && data.User.Role.CanEdit() {
+						<a href="/new" class="btn btn-primary">
+							@components.IconPlus("sm")
+							Create your first page
+						</a>
+					}
+				</div>
+			</div>
+		} else {
+			<div class="page-grid">
+				for _, page := range data.Pages {
+					<a href={ templ.SafeURL("/wiki/" + page.Slug) } class="page-card">
+						<div class="page-card-title">
+							@components.IconDocument("")
+							{ page.Title }
+						</div>
+						if page.Excerpt != "" {
+							<div class="page-card-desc">{ page.Excerpt }</div>
+						}
+						<div class="page-card-meta">
+							<span class="page-card-meta-item">
+								@components.IconUser("xs")
+								{ page.Author }
+							</span>
+							<span class="page-card-meta-item">
+								@components.IconClock("xs")
+								{ formatRelativeTime(page.UpdatedAt) }
+							</span>
+						</div>
+					</a>
+				}
+			</div>
+
+			if data.TotalPages > data.PerPage {
+				<div class="pagination">
+					if data.Page > 1 {
+						<a href={ buildPageURL(data.Page-1, data.Tag) } class="pagination-btn">
+							@components.IconArrowLeft("sm")
+							Previous
+						</a>
+					}
+					if data.Page * data.PerPage < data.TotalPages {
+						<a href={ buildPageURL(data.Page+1, data.Tag) } class="pagination-btn">
+							Next
+							@components.IconArrowRight("sm")
+						</a>
+					}
+				</div>
+			}
+		}
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func buildPageURL(page int, tag string) templ.SafeURL {
+	url := fmt.Sprintf("/pages?page=%d", page)
+	if tag != "" {
+		url = fmt.Sprintf("/tag/%s?page=%d", tag, page)
+	}
+	return templ.SafeURL(url)
+}
+
+// formatRelativeTime is defined in home.templ

@@ -1,0 +1,482 @@
+package admin
+
+import (
+	"fmt"
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+// DashboardData contains data for the admin dashboard.
+type DashboardData struct {
+	layouts.PageData
+	Stats       *Stats
+	Users       []models.User
+	Settings    *Settings
+}
+
+// Stats contains wiki statistics.
+type Stats struct {
+	PageCount int
+	UserCount int
+	TagCount  int
+}
+
+// Settings contains wiki settings.
+type Settings struct {
+	SiteName          string
+	AllowRegistration bool
+	DefaultRole       string
+	RequireAuth       bool
+}
+
+// Dashboard renders the admin dashboard.
+templ Dashboard(data DashboardData) {
+	@layouts.Base(data.PageData) {
+		<div class="content-main">
+			<div class="page-header">
+				<h1 class="page-title">Admin Dashboard</h1>
+				<p class="page-description">Manage your wiki settings and users</p>
+			</div>
+
+			<!-- Stats Cards -->
+		<div class="stats-grid mb-6">
+			<div class="stat-card">
+				<div class="stat-value">{ intToStr(data.Stats.PageCount) }</div>
+				<div class="stat-label">Pages</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{ intToStr(data.Stats.UserCount) }</div>
+				<div class="stat-label">Users</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{ intToStr(data.Stats.TagCount) }</div>
+				<div class="stat-label">Tags</div>
+			</div>
+		</div>
+
+		<!-- Main Content Grid -->
+		<div class="admin-grid">
+			<!-- Users Section -->
+			<div class="admin-main">
+				<div class="card">
+					<div class="card-header">
+						<h2 class="card-title">Users</h2>
+						<button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('create_user_modal').showModal()">
+							@components.IconPlus("sm")
+							Add User
+						</button>
+					</div>
+					<div class="card-body p-0">
+						<div class="data-list">
+							for _, user := range data.Users {
+								<div class="data-list-item" id={ "user-" + intToStr64(user.ID) }>
+									<div class="user-avatar">{ string(user.Username[0]) }</div>
+									<div class="data-list-content">
+										<div class="data-list-title">{ user.Username }</div>
+										<div class="data-list-meta">{ user.Email }</div>
+									</div>
+									<div class="flex-center gap-2">
+										@RoleBadge(user.Role)
+										if user.IsActive {
+											<span class="tag badge-success">Active</span>
+										} else {
+											<span class="tag badge-error">Inactive</span>
+										}
+									</div>
+									<div class="flex-center gap-1">
+										<button
+											type="button"
+											class="icon-btn edit-user-btn"
+											data-id={ intToStr64(user.ID) }
+											data-email={ user.Email }
+											data-role={ string(user.Role) }
+											data-active={ boolToStr(user.IsActive) }
+											title="Edit"
+										>
+											@components.IconEdit("")
+										</button>
+										if user.Role != models.RoleAdmin {
+											<button
+												type="button"
+												class="icon-btn icon-btn-danger"
+												onclick={ showDeleteUserModal(intToStr64(user.ID), user.Username) }
+												title="Delete"
+											>
+												@components.IconTrash("")
+											</button>
+										}
+									</div>
+								</div>
+							}
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Settings Section -->
+			<div class="admin-sidebar">
+				<!-- Quick Settings -->
+				<div class="card">
+					<div class="card-header">
+						<h2 class="card-title">Settings</h2>
+					</div>
+					<form hx-post="/admin/settings" hx-swap="none" class="card-body">
+						<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+
+						<div class="form-group">
+							<label class="form-label" for="site_name">Site Name</label>
+							<input type="text" id="site_name" name="site_name" value={ data.Settings.SiteName } class="form-input"/>
+						</div>
+
+						<div class="form-group flex-between">
+							<div>
+								<label class="form-label mb-0">Allow Registration</label>
+								<p class="form-hint mb-0">Let new users create accounts</p>
+							</div>
+							<input
+								type="checkbox"
+								id="allow_registration"
+								name="allow_registration"
+								value="true"
+								if data.Settings.AllowRegistration {
+									checked
+								}
+								class="form-checkbox"
+							/>
+						</div>
+
+						<div class="form-group flex-between">
+							<div>
+								<label class="form-label mb-0">Private Wiki</label>
+								<p class="form-hint mb-0">Require login to view pages</p>
+							</div>
+							<input
+								type="checkbox"
+								id="require_auth"
+								name="require_auth"
+								value="true"
+								if data.Settings.RequireAuth {
+									checked
+								}
+								class="form-checkbox"
+							/>
+						</div>
+
+						<div class="form-group">
+							<label class="form-label" for="default_role">Default Role</label>
+							<select id="default_role" name="default_role" class="form-input">
+								<option value="viewer" selected?={ data.Settings.DefaultRole == "viewer" }>Viewer</option>
+								<option value="editor" selected?={ data.Settings.DefaultRole == "editor" }>Editor</option>
+							</select>
+						</div>
+
+						<button type="submit" class="btn btn-primary w-full">
+							@components.IconSave("sm")
+							Save Settings
+						</button>
+					</form>
+				</div>
+
+				<!-- Quick Actions -->
+				<div class="card mt-4">
+					<div class="card-header">
+						<h3 class="card-title">Quick Actions</h3>
+					</div>
+					<div class="card-body p-2">
+						<a href="/new" class="admin-quick-link">
+							@components.IconPlus("")
+							Create New Page
+						</a>
+						<a href="/pages" class="admin-quick-link">
+							@components.IconDocument("")
+							Manage Pages
+						</a>
+						<a href="/tags" class="admin-quick-link">
+							@components.IconTag("")
+							Manage Tags
+						</a>
+					</div>
+				</div>
+			</div>
+		</div>
+		</div>
+
+		<!-- Create User Modal -->
+		@CreateUserModal(data.CSRFToken)
+
+		<!-- Edit User Modal -->
+		@EditUserModal(data.CSRFToken)
+
+		<!-- Delete User Confirmation Modal -->
+		<dialog id="delete_user_modal" class="modal confirm-modal">
+			<div class="modal-box modal-sm">
+				<div class="confirm-modal-icon danger">
+					@components.IconTrash("lg")
+				</div>
+				<h3 class="confirm-modal-title">Delete User</h3>
+				<p class="confirm-modal-message">
+					Are you sure you want to delete <strong id="delete-username"></strong>? This action cannot be undone.
+				</p>
+				<div class="confirm-modal-actions">
+					<button type="button" class="btn btn-ghost" onclick="document.getElementById('delete_user_modal').close()">
+						@components.IconX("sm")
+						Cancel
+					</button>
+					<button
+						type="button"
+						id="delete-user-confirm-btn"
+						class="btn btn-danger"
+						hx-delete=""
+						hx-target=""
+						hx-swap="outerHTML"
+						hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
+					>
+						@components.IconTrash("sm")
+						Delete User
+					</button>
+				</div>
+			</div>
+		</dialog>
+
+		<!-- Admin Modal Scripts -->
+		<script>
+			document.addEventListener('DOMContentLoaded', function() {
+				const createForm = document.getElementById('create-user-form');
+				const createError = document.getElementById('create-user-error');
+				const createModal = document.getElementById('create_user_modal');
+
+				const editForm = document.getElementById('edit-user-form');
+				const editError = document.getElementById('edit-user-error');
+				const editModal = document.getElementById('edit_user_modal');
+
+				// Edit button click handlers
+				document.querySelectorAll('.edit-user-btn').forEach(btn => {
+					btn.addEventListener('click', function() {
+						const id = this.dataset.id;
+						const email = this.dataset.email;
+						const role = this.dataset.role;
+						const active = this.dataset.active === 'true';
+
+						editForm.dataset.userId = id;
+						document.getElementById('edit-email').value = email;
+						document.getElementById('edit-role').value = role;
+						document.getElementById('edit-active').checked = active;
+						editError.classList.add('hidden');
+						editModal.showModal();
+					});
+				});
+
+				// Create user form submit
+				createForm.addEventListener('submit', async function(e) {
+					e.preventDefault();
+					createError.classList.add('hidden');
+
+					const formData = new FormData(createForm);
+					try {
+						const response = await fetch('/admin/users', {
+							method: 'POST',
+							body: formData,
+							headers: {
+								'X-CSRF-Token': formData.get('csrf_token')
+							}
+						});
+
+						const data = await response.json();
+
+						if (response.ok && data.success) {
+							createModal.close();
+							Toast.success(data.message || 'User created successfully');
+							setTimeout(() => window.location.reload(), 500);
+						} else {
+							createError.textContent = data.error || 'Failed to create user';
+							createError.classList.remove('hidden');
+						}
+					} catch (err) {
+						createError.textContent = 'An error occurred. Please try again.';
+						createError.classList.remove('hidden');
+					}
+				});
+
+				// Edit user form submit
+				editForm.addEventListener('submit', async function(e) {
+					e.preventDefault();
+					editError.classList.add('hidden');
+
+					const userId = editForm.dataset.userId;
+					const formData = new FormData(editForm);
+
+					try {
+						const response = await fetch('/admin/users/' + userId, {
+							method: 'POST',
+							body: formData,
+							headers: {
+								'X-CSRF-Token': formData.get('csrf_token')
+							}
+						});
+
+						const data = await response.json();
+
+						if (response.ok && data.success) {
+							editModal.close();
+							Toast.success(data.message || 'User updated successfully');
+							setTimeout(() => window.location.reload(), 500);
+						} else {
+							editError.textContent = data.error || 'Failed to update user';
+							editError.classList.remove('hidden');
+						}
+					} catch (err) {
+						editError.textContent = 'An error occurred. Please try again.';
+						editError.classList.remove('hidden');
+					}
+				});
+
+				// Reset forms when modals close
+				createModal.addEventListener('close', function() {
+					createForm.reset();
+					createError.classList.add('hidden');
+				});
+
+				editModal.addEventListener('close', function() {
+					editForm.reset();
+					editError.classList.add('hidden');
+				});
+			});
+		</script>
+	}
+}
+
+// RoleBadge renders a role badge.
+templ RoleBadge(role models.Role) {
+	switch role {
+		case models.RoleAdmin:
+			<span class="tag badge-error">Admin</span>
+		case models.RoleEditor:
+			<span class="tag">Editor</span>
+		default:
+			<span class="tag badge-neutral">Viewer</span>
+	}
+}
+
+script showDeleteUserModal(userId string, username string) {
+	var modal = document.getElementById('delete_user_modal');
+	var usernameEl = document.getElementById('delete-username');
+	var confirmBtn = document.getElementById('delete-user-confirm-btn');
+
+	usernameEl.textContent = username;
+	confirmBtn.setAttribute('hx-delete', '/admin/users/' + userId);
+	confirmBtn.setAttribute('hx-target', '#user-' + userId);
+	htmx.process(confirmBtn);
+
+	confirmBtn.onclick = function() { modal.close(); };
+	modal.showModal();
+}
+
+// CreateUserModal renders the create user modal.
+templ CreateUserModal(csrfToken string) {
+	<dialog id="create_user_modal" class="modal">
+		<div class="modal-box">
+			<button type="button" class="icon-btn modal-close" onclick="document.getElementById('create_user_modal').close()">
+				@components.IconX("lg")
+			</button>
+			<h3 class="modal-title">Create New User</h3>
+			<div id="create-user-error" class="alert alert-error mb-4 hidden"></div>
+			<form id="create-user-form">
+				<input type="hidden" name="csrf_token" value={ csrfToken }/>
+				<div class="form-group">
+					<label class="form-label" for="new-username">Username</label>
+					<input type="text" id="new-username" name="username" required class="form-input"/>
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="new-email">Email</label>
+					<input type="email" id="new-email" name="email" required class="form-input"/>
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="new-password">Password</label>
+					<input type="password" id="new-password" name="password" required class="form-input"/>
+					<p class="form-hint">8+ chars, uppercase, lowercase, and number required</p>
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="new-role">Role</label>
+					<select id="new-role" name="role" class="form-input">
+						<option value="viewer">Viewer</option>
+						<option value="editor">Editor</option>
+						<option value="admin">Admin</option>
+					</select>
+				</div>
+				<div class="modal-actions">
+					<button type="button" class="btn btn-ghost" onclick="document.getElementById('create_user_modal').close()">
+						@components.IconX("sm")
+						Cancel
+					</button>
+					<button type="submit" class="btn btn-primary">
+						@components.IconPlus("sm")
+						Create User
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+// EditUserModal renders the edit user modal.
+templ EditUserModal(csrfToken string) {
+	<dialog id="edit_user_modal" class="modal">
+		<div class="modal-box">
+			<button type="button" class="icon-btn modal-close" onclick="document.getElementById('edit_user_modal').close()">
+				@components.IconX("lg")
+			</button>
+			<h3 class="modal-title">Edit User</h3>
+			<div id="edit-user-error" class="alert alert-error mb-4 hidden"></div>
+			<form id="edit-user-form" data-user-id="">
+				<input type="hidden" name="csrf_token" value={ csrfToken }/>
+				<div class="form-group">
+					<label class="form-label" for="edit-email">Email</label>
+					<input type="email" id="edit-email" name="email" class="form-input"/>
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="edit-password">New Password</label>
+					<input type="password" id="edit-password" name="password" class="form-input"/>
+					<p class="form-hint">Leave blank to keep current (8+ chars, uppercase, lowercase, number)</p>
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="edit-role">Role</label>
+					<select id="edit-role" name="role" class="form-input">
+						<option value="viewer">Viewer</option>
+						<option value="editor">Editor</option>
+						<option value="admin">Admin</option>
+					</select>
+				</div>
+				<div class="form-group form-checkbox-inline">
+					<input type="checkbox" id="edit-active" name="is_active" value="true" class="form-checkbox"/>
+					<label for="edit-active">Active</label>
+				</div>
+				<div class="modal-actions">
+					<button type="button" class="btn btn-ghost" onclick="document.getElementById('edit_user_modal').close()">
+						@components.IconX("sm")
+						Cancel
+					</button>
+					<button type="submit" class="btn btn-primary">
+						@components.IconSave("sm")
+						Save Changes
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+func intToStr(n int) string {
+	return fmt.Sprintf("%d", n)
+}
+
+func intToStr64(n int64) string {
+	return fmt.Sprintf("%d", n)
+}
+
+func boolToStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}

@@ -1,0 +1,28 @@
+package components
+
+// Logo renders the site logo with consistent styling
+templ Logo(siteName string, size string) {
+	if size == "lg" {
+		<a href="/" class="logo">
+			<div class="logo-icon logo-icon-lg">{ firstLetter(siteName) }</div>
+			<span class="logo-text logo-text-lg">{ siteName }</span>
+		</a>
+	} else {
+		<a href="/" class="logo">
+			<div class="logo-icon">{ firstLetter(siteName) }</div>
+			<span class="logo-text">{ siteName }</span>
+		</a>
+	}
+}
+
+// LogoMark renders just the logo icon without text
+templ LogoMark(siteName string) {
+	<div class="logo-icon">{ firstLetter(siteName) }</div>
+}
+
+func firstLetter(s string) string {
+	if len(s) == 0 {
+		return "W"
+	}
+	return string([]rune(s)[0])
+}

@@ -1,0 +1,89 @@
+package components
+
+import (
+	"fmt"
+	"time"
+	"gowiki/internal/models"
+)
+
+templ PageListItem(page models.PageSummary) {
+	<a href={ templ.SafeURL("/wiki/" + page.Slug) } class="data-list-item">
+		<div class="data-list-icon">
+			<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+			</svg>
+		</div>
+		<div class="data-list-content">
+			<div class="data-list-title">{ page.Title }</div>
+			<div class="data-list-meta">{ page.Author } · { formatRelativeTime(page.UpdatedAt) }</div>
+		</div>
+		<svg class="data-list-arrow" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+		</svg>
+	</a>
+}
+
+templ TagBadge(tag models.Tag, showCount bool) {
+	<a href={ templ.SafeURL("/tag/" + tag.Name) } class="tag">
+		{ tag.Name }
+		if showCount && tag.PageCount > 0 {
+			<span style="opacity: 0.7; margin-left: 4px;">{ intToStr(tag.PageCount) }</span>
+		}
+	</a>
+}
+
+templ EmptyState(icon, title, message string) {
+	<div class="empty-state">
+		<div class="empty-state-icon">
+			@templ.Raw(icon)
+		</div>
+		<h3 class="empty-state-title">{ title }</h3>
+		<p class="empty-state-text">{ message }</p>
+	</div>
+}
+
+func formatRelativeTime(t time.Time) string {
+	now := time.Now()
+	diff := now.Sub(t)
+
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		mins := int(diff.Minutes())
+		if mins == 1 {
+			return "1 minute ago"
+		}
+		return intToStr(mins) + " minutes ago"
+	case diff < 24*time.Hour:
+		hours := int(diff.Hours())
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return intToStr(hours) + " hours ago"
+	case diff < 7*24*time.Hour:
+		days := int(diff.Hours() / 24)
+		if days == 1 {
+			return "yesterday"
+		}
+		return intToStr(days) + " days ago"
+	case diff < 30*24*time.Hour:
+		weeks := int(diff.Hours() / 24 / 7)
+		if weeks == 1 {
+			return "1 week ago"
+		}
+		return intToStr(weeks) + " weeks ago"
+	case diff < 365*24*time.Hour:
+		months := int(diff.Hours() / 24 / 30)
+		if months == 1 {
+			return "1 month ago"
+		}
+		return intToStr(months) + " months ago"
+	default:
+		return t.Format("Jan 2, 2006")
+	}
+}
+
+func intToStr(n int) string {
+	return fmt.Sprintf("%d", n)
+}

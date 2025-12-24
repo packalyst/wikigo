@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Dependencies
+node_modules
+
+# Build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+*.test
+
+# Coverage
+*.out
+coverage.html
+
+# Documentation
+*.md
+!README.md
+!API.md
+docs/
+
+# Local data
+data/
+uploads/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temp files
+tmp/
+temp/
+.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Development
+air.toml
+.air.toml

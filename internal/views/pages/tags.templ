@@ -1,0 +1,44 @@
+package pages
+
+import (
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+// TagsData contains data for the tags page.
+type TagsData struct {
+	layouts.PageData
+	Tags []models.Tag
+}
+
+// Tags renders the tags overview page.
+templ Tags(data TagsData) {
+	@layouts.Base(data.PageData) {
+		<div class="page-header">
+			<h1 class="page-title">Tags</h1>
+			<p class="page-description">Browse pages by topic</p>
+		</div>
+
+		<!-- Tags Grid -->
+		<div class="card">
+			<div class="card-body">
+				if len(data.Tags) == 0 {
+					<div class="empty-state">
+						<svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+						</svg>
+						<h3 class="empty-state-title">No tags yet</h3>
+						<p class="empty-state-text">Tags will appear here when pages are tagged.</p>
+					</div>
+				} else {
+					<div class="flex flex-wrap gap-3">
+						for _, tag := range data.Tags {
+							@components.TagBadge(tag, true)
+						}
+					</div>
+				}
+			</div>
+		</div>
+	}
+}

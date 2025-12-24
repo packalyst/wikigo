@@ -1,0 +1,49 @@
+package components
+
+import "strings"
+
+// AvatarSize represents the size of the avatar
+type AvatarSize string
+
+const (
+	AvatarSm AvatarSize = "sm"
+	AvatarMd AvatarSize = "md"
+	AvatarLg AvatarSize = "lg"
+)
+
+// Avatar renders a user avatar with the first letter of their name
+templ Avatar(name string, size AvatarSize) {
+	<div class={ avatarClass(size) }>
+		{ getInitial(name) }
+	</div>
+}
+
+// AvatarWithName renders an avatar with the user's name next to it
+templ AvatarWithName(name string, size AvatarSize) {
+	<div class="flex-center gap-2">
+		@Avatar(name, size)
+		<span class="avatar-name">{ name }</span>
+	</div>
+}
+
+func avatarClass(size AvatarSize) string {
+	switch size {
+	case AvatarSm:
+		return "user-avatar user-avatar-sm"
+	case AvatarLg:
+		return "user-avatar user-avatar-lg"
+	default:
+		return "user-avatar"
+	}
+}
+
+func getInitial(name string) string {
+	if len(name) == 0 {
+		return "?"
+	}
+	// Get first character, handling multi-byte characters
+	for _, r := range strings.ToUpper(name) {
+		return string(r)
+	}
+	return "?"
+}

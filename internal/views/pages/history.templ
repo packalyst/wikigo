@@ -1,0 +1,217 @@
+package pages
+
+import (
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+// HistoryData contains data for the page history view.
+type HistoryData struct {
+	layouts.PageData
+	Page      *models.Page
+	Revisions []models.RevisionSummary
+}
+
+// History renders the page history.
+templ History(data HistoryData) {
+	@layouts.Base(data.PageData) {
+		<div class="content-main">
+			<div class="page-header">
+				<div class="page-header-top">
+					<h1 class="page-title">History: { data.Page.Title }</h1>
+					<a href={ templ.SafeURL("/wiki/" + data.Page.Slug) } class="btn btn-ghost btn-sm">
+						@components.IconChevronLeft("sm")
+						Back to page
+					</a>
+				</div>
+				<div class="page-meta">
+					<span class="page-meta-item">{ pluralize(len(data.Revisions), "revision", "revisions") }</span>
+				</div>
+			</div>
+
+			<!-- Current Version -->
+			<div class="current-version-section">
+				<div class="flex-between">
+					<div class="flex-center gap-3">
+						<div class="current-version-badge">
+							@components.IconDocument("sm")
+						</div>
+						<div>
+							<div class="font-medium">Current Version</div>
+							<p class="text-secondary text-sm">
+								if data.Page.Author != nil {
+									By { data.Page.Author.Username } · { formatTime(data.Page.UpdatedAt) }
+								}
+							</p>
+						</div>
+					</div>
+					<a href={ templ.SafeURL("/wiki/" + data.Page.Slug) } class="btn btn-ghost btn-sm">
+						@components.IconEye("sm")
+						View
+					</a>
+				</div>
+			</div>
+
+			<!-- Revision List -->
+			<div class="revision-section">
+				<h2 class="section-title">Revision History</h2>
+				if len(data.Revisions) == 0 {
+					<div class="empty-state">
+						@components.IconClock("lg")
+						<h3 class="empty-state-title">No previous revisions</h3>
+						<p class="empty-state-text">This page hasn't been edited yet.</p>
+					</div>
+				} else {
+					<div class="revision-list">
+						for i, rev := range data.Revisions {
+							@RevisionItem(rev, data.Page.Slug, len(data.Revisions) - i, data.CSRFToken, data.User)
+						}
+					</div>
+				}
+			</div>
+		</div>
+
+			<!-- Revert Confirmation Modal -->
+			if data.User != nil && data.User.Role.CanEdit() {
+				<dialog id="revert_modal" class="modal confirm-modal">
+					<div class="modal-box modal-sm">
+						<div class="confirm-modal-icon">
+							<svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"/>
+							</svg>
+						</div>
+						<h3 class="confirm-modal-title">Revert to Revision</h3>
+						<p class="confirm-modal-message">
+							Are you sure you want to revert to revision <strong id="revert-version-num"></strong>? This will create a new revision with the old content.
+						</p>
+						<div class="confirm-modal-actions">
+							<button type="button" class="btn btn-ghost" onclick="document.getElementById('revert_modal').close()">
+								@components.IconX("sm")
+								Cancel
+							</button>
+							<button
+								type="button"
+								id="revert-confirm-btn"
+								class="btn btn-warning"
+								hx-post=""
+								hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
+							>
+								@components.IconRewind("sm")
+								Revert
+							</button>
+						</div>
+					</div>
+				</dialog>
+			}
+	}
+}
+
+// RevisionItem renders a single revision entry.
+templ RevisionItem(rev models.RevisionSummary, pageSlug string, versionNum int, csrfToken string, user *models.User) {
+	<div class="revision-item">
+		<span class="revision-number">{ intToStr(versionNum) }</span>
+		<div class="revision-content">
+			<div class="revision-header">
+				@components.Avatar(rev.Author, components.AvatarSm)
+				<span class="font-medium">{ rev.Author }</span>
+			</div>
+			<div class="revision-meta">
+				<span class="revision-date">
+					@components.IconClock("sm")
+					{ formatTime(rev.CreatedAt) }
+				</span>
+				if rev.Comment != "" {
+					<span class="revision-comment">{ rev.Comment }</span>
+				}
+			</div>
+		</div>
+		<div class="revision-actions">
+			<a href={ templ.SafeURL("/revision/" + intToStr64(rev.ID)) } class="btn btn-ghost btn-sm">
+				@components.IconEye("sm")
+				View
+			</a>
+			if user != nil && user.Role.CanEdit() {
+				<button
+					type="button"
+					class="btn btn-warning btn-sm"
+					onclick={ showRevertModal(intToStr64(rev.ID), intToStr(versionNum)) }
+				>
+					@components.IconRewind("sm")
+					Revert
+				</button>
+			}
+		</div>
+	</div>
+}
+
+script showRevertModal(revId string, versionNum string) {
+	var modal = document.getElementById('revert_modal');
+	var versionEl = document.getElementById('revert-version-num');
+	var confirmBtn = document.getElementById('revert-confirm-btn');
+
+	versionEl.textContent = versionNum;
+	confirmBtn.setAttribute('hx-post', '/revert/' + revId);
+	htmx.process(confirmBtn);
+
+	confirmBtn.onclick = function() { modal.close(); };
+	modal.showModal();
+}
+
+// RevisionView renders a specific revision.
+type RevisionViewData struct {
+	layouts.PageData
+	Revision    *models.Revision
+	Page        *models.Page
+	ContentHTML string
+}
+
+templ RevisionView(data RevisionViewData) {
+	@layouts.Base(data.PageData) {
+		<div class="content-main">
+			<div class="page-header">
+				<div class="page-header-top">
+					<h1 class="page-title">{ data.Page.Title }</h1>
+					<div class="page-actions btn-group">
+						<a href={ templ.SafeURL("/wiki/" + data.Page.Slug) } class="btn btn-ghost btn-sm">
+							@components.IconEye("sm")
+							View Current
+						</a>
+						<a href={ templ.SafeURL("/history/" + data.Page.Slug) } class="btn btn-ghost btn-sm">
+							@components.IconClock("sm")
+							All Revisions
+						</a>
+					</div>
+				</div>
+				<div class="page-meta">
+					<span class="page-meta-item">
+						if data.Revision.Author != nil {
+							Revision by { data.Revision.Author.Username } · { formatTime(data.Revision.CreatedAt) }
+						}
+					</span>
+					if data.Revision.Comment != "" {
+						<span class="page-meta-separator"></span>
+						<span class="page-meta-item">{ data.Revision.Comment }</span>
+					}
+				</div>
+			</div>
+
+			<!-- Warning Banner -->
+			@components.Alert(components.AlertWarning, "Viewing Historical Revision", "") {
+				<p>This is an older version of the page. The current version may be different.</p>
+			}
+
+			<!-- Content -->
+			<div class="prose mt-4">
+				@templ.Raw(data.ContentHTML)
+			</div>
+		</div>
+	}
+}
+
+func pluralize(count int, singular string, plural string) string {
+	if count == 1 {
+		return "1 " + singular
+	}
+	return intToStr(count) + " " + plural
+}

@@ -1,0 +1,82 @@
+package pages
+
+import (
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+type SearchData struct {
+	layouts.PageData
+	Query   string
+	Results []models.SearchResult
+}
+
+templ Search(data SearchData) {
+	@layouts.Base(data.PageData) {
+		<div class="page-header">
+			<h1 class="page-title">Search Results</h1>
+			<p class="page-description">{ intToStr(len(data.Results)) } results for "{ data.Query }"</p>
+		</div>
+
+		if len(data.Results) == 0 {
+			<div class="card">
+				<div class="empty-state">
+					<span class="empty-state-icon">
+						@components.IconSearch("container")
+					</span>
+					<h3 class="empty-state-title">No results found</h3>
+					<p class="empty-state-text">Try different keywords or check your spelling.</p>
+				</div>
+			</div>
+		} else {
+			<div class="card">
+				<div class="data-list">
+					for _, result := range data.Results {
+						<a href={ templ.SafeURL("/wiki/" + result.Slug) } class="data-list-item">
+							<div class="data-list-icon">
+								@components.IconDocument("container")
+							</div>
+							<div class="data-list-content">
+								<div class="data-list-title">{ result.Title }</div>
+								<div class="search-result-snippet">
+									@templ.Raw(result.Snippet)
+								</div>
+							</div>
+							<span class="data-list-arrow">
+								@components.IconChevronRight("")
+							</span>
+						</a>
+					}
+				</div>
+			</div>
+		}
+	}
+}
+
+templ SearchDropdown(results []models.SearchResult, query string) {
+	if query == "" {
+		<div class="search-dropdown-empty">
+			Type to search...
+		</div>
+	} else if len(results) == 0 {
+		<div class="search-dropdown-empty">
+			No results for "{ query }"
+		</div>
+	} else {
+		for _, result := range results {
+			<a href={ templ.SafeURL("/wiki/" + result.Slug) } class="search-result-item">
+				<div class="search-result-title">{ result.Title }</div>
+				<div class="search-result-snippet">
+					@templ.Raw(result.Snippet)
+				</div>
+			</a>
+		}
+		<div class="search-dropdown-footer">
+			<a href={ templ.SafeURL("/search?q=" + query) } class="btn btn-ghost btn-sm w-full">
+				View all results
+				@components.IconArrowRight("sm")
+			</a>
+		</div>
+	}
+}

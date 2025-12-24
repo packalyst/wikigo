@@ -1,0 +1,111 @@
+package setup
+
+import "gowiki/internal/views/components"
+
+type SetupData struct {
+	SiteName  string
+	Error     string
+	Username  string
+	Email     string
+	CSRFToken string
+}
+
+templ SetupPage(data SetupData) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>Setup | { data.SiteName }</title>
+		<link rel="stylesheet" href="/static/css/output.css"/>
+	</head>
+	<body class="setup-body">
+		<div class="setup-container">
+			<div class="setup-card">
+				<div class="setup-header">
+					<div class="setup-logo">
+						<div class="logo-icon">G</div>
+					</div>
+					<h1 class="setup-title">Welcome to { data.SiteName }</h1>
+					<p class="setup-subtitle">Let's set up your wiki. Create an administrator account to get started.</p>
+				</div>
+
+				if data.Error != "" {
+					<div class="setup-form pb-0">
+						@components.AlertSimple(components.AlertError, data.Error)
+					</div>
+				}
+
+				<form method="POST" action="/setup" class="setup-form">
+					<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+					<div class="form-group">
+						<label for="username" class="form-label">Admin Username</label>
+						<input
+							type="text"
+							id="username"
+							name="username"
+							class="form-input"
+							placeholder="Enter admin username"
+							value={ data.Username }
+							required
+							autofocus
+							minlength="3"
+							maxlength="32"
+							pattern="[a-zA-Z][a-zA-Z0-9_-]*"
+						/>
+						<p class="form-hint">3-32 characters, starts with letter, letters/numbers/underscore/hyphen only</p>
+					</div>
+
+					<div class="form-group">
+						<label for="email" class="form-label">Admin Email</label>
+						<input
+							type="email"
+							id="email"
+							name="email"
+							class="form-input"
+							placeholder="admin@example.com"
+							value={ data.Email }
+							required
+						/>
+					</div>
+
+					<div class="form-group">
+						<label for="password" class="form-label">Password</label>
+						<input
+							type="password"
+							id="password"
+							name="password"
+							class="form-input"
+							placeholder="Enter a strong password"
+							required
+							minlength="8"
+						/>
+						<p class="form-hint">Min 8 characters, must include uppercase, lowercase, and number</p>
+					</div>
+
+					<div class="form-group">
+						<label for="password_confirm" class="form-label">Confirm Password</label>
+						<input
+							type="password"
+							id="password_confirm"
+							name="password_confirm"
+							class="form-input"
+							placeholder="Confirm your password"
+							required
+						/>
+					</div>
+
+					<button type="submit" class="btn btn-primary btn-lg btn-block">
+						@components.IconUserPlus("sm")
+						Create Admin Account
+					</button>
+				</form>
+
+				<div class="setup-footer">
+					<p>This setup page is only shown once. After creating the admin account, you'll be able to log in and start using your wiki.</p>
+				</div>
+			</div>
+		</div>
+	</body>
+	</html>
+}

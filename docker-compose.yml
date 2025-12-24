@@ -1,0 +1,60 @@
+services:
+  wiki:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gowiki:latest
+    container_name: gowiki
+    restart: unless-stopped
+    ports:
+      - "${WIKI_PORT:-9090}:${WIKI_PORT:-9090}"
+    environment:
+      # Required - generate with: openssl rand -hex 32
+      - WIKI_SECRET_KEY=${WIKI_SECRET_KEY:?WIKI_SECRET_KEY is required}
+
+      # Site settings
+      - WIKI_SITE_NAME=${WIKI_SITE_NAME:-GoWiki}
+      - WIKI_SITE_URL=${WIKI_SITE_URL:-http://localhost:8080}
+
+      # Registration settings
+      - WIKI_ALLOW_REGISTRATION=${WIKI_ALLOW_REGISTRATION:-false}
+      - WIKI_DEFAULT_ROLE=${WIKI_DEFAULT_ROLE:-viewer}
+
+      # Database
+      - WIKI_DB_PATH=/app/data/wiki.db
+
+      # Uploads
+      - WIKI_UPLOAD_PATH=/app/uploads
+      - WIKI_MAX_UPLOAD_SIZE=${WIKI_MAX_UPLOAD_SIZE:-10485760}
+
+      # Backups
+      - WIKI_BACKUP_ENABLED=${WIKI_BACKUP_ENABLED:-true}
+      - WIKI_BACKUP_PATH=/app/backups
+
+      # Security
+      - WIKI_BCRYPT_COST=${WIKI_BCRYPT_COST:-12}
+      - WIKI_RATE_LIMIT=${WIKI_RATE_LIMIT:-100}
+
+      # Timezone
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./backups:/app/backups
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64M
+
+# Optional: Add reverse proxy
+# networks:
+#   default:
+#     name: wiki-network

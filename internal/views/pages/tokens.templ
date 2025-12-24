@@ -1,0 +1,259 @@
+package pages
+
+import (
+	"fmt"
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+// TokensData contains data for the API tokens page.
+type TokensData struct {
+	layouts.PageData
+	Tokens   []models.APIToken
+	NewToken string // Only set when a token was just created
+}
+
+// Tokens renders the API tokens management page.
+templ Tokens(data TokensData) {
+	@layouts.Base(data.PageData) {
+		<div class="content-main">
+			<div class="page-header">
+				<div class="page-header-top">
+					<h1 class="page-title">API Tokens</h1>
+					<button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('create_token_modal').showModal()">
+						@components.IconKey("sm")
+						Create Token
+					</button>
+				</div>
+				<p class="page-description">Manage tokens for programmatic API access</p>
+			</div>
+
+			<!-- New Token Alert -->
+			if data.NewToken != "" {
+				<div class="new-token-alert">
+					<div class="new-token-header">
+						<span class="new-token-icon">
+							@components.IconSuccess("container")
+						</span>
+						<div>
+							<strong>Token created successfully!</strong>
+							<p>Copy this token now. You won't be able to see it again.</p>
+						</div>
+					</div>
+					<div class="new-token-value">
+						<code id="new-token-code">{ data.NewToken }</code>
+						<button type="button" class="btn btn-sm" onclick="copyToClipboard(document.getElementById('new-token-code').textContent, this)">
+							@components.IconCopy("")
+							Copy
+						</button>
+					</div>
+				</div>
+			}
+
+			<!-- Tokens List -->
+			<div class="card">
+				<div class="card-header">
+					<h2 class="card-title">Your Tokens</h2>
+				</div>
+				if len(data.Tokens) == 0 {
+					<div class="empty-state">
+						@components.IconKey("lg")
+						<h3 class="empty-state-title">No API tokens</h3>
+						<p class="empty-state-text">Create a token to access the API programmatically.</p>
+						<button type="button" class="btn btn-primary mt-4" onclick="document.getElementById('create_token_modal').showModal()">
+							@components.IconPlus("sm")
+							Create your first token
+						</button>
+					</div>
+				} else {
+					<div class="token-list">
+						for _, token := range data.Tokens {
+							<div class="token-item" id={ "token-" + fmt.Sprintf("%d", token.ID) }>
+								<div class="token-info">
+									<div class="token-name">{ token.Name }</div>
+									<div class="token-meta">
+										<span class="token-scopes">
+											for i, scope := range token.ScopeList() {
+												<span class="tag tag-sm">{ scope }</span>
+												if i < len(token.ScopeList())-1 {
+													{ " " }
+												}
+											}
+										</span>
+										<span class="token-separator">·</span>
+										<span>Created { formatTime(token.CreatedAt) }</span>
+										if token.WasUsed() {
+											<span class="token-separator">·</span>
+											<span>Last used { token.LastUsedString() }</span>
+										}
+									</div>
+								</div>
+								<div class="token-actions">
+									<button
+										type="button"
+										class="btn btn-danger btn-sm"
+										onclick={ showRevokeModal(fmt.Sprintf("%d", token.ID), token.Name) }
+									>
+										@components.IconX("sm")
+										Revoke
+									</button>
+								</div>
+							</div>
+						}
+					</div>
+				}
+			</div>
+		</div>
+
+		<!-- Create Token Modal -->
+		<dialog id="create_token_modal" class="modal">
+			<div class="modal-box">
+				<button type="button" class="icon-btn modal-close" onclick="document.getElementById('create_token_modal').close()">
+					@components.IconX("lg")
+				</button>
+				<h3 class="modal-title">Create API Token</h3>
+				<form action="/tokens" method="POST">
+					<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+					<div class="form-group">
+						<label class="form-label" for="token-name">Token Name</label>
+						<input type="text" id="token-name" name="name" required class="form-input" placeholder="e.g., My Script, CI/CD Pipeline"/>
+						<p class="form-hint">A descriptive name to identify this token</p>
+					</div>
+					<div class="form-group">
+						<label class="form-label">Permissions</label>
+						<div class="checkbox-group">
+							<label class="checkbox-item">
+								<input type="checkbox" name="scopes" value="read" checked class="form-checkbox"/>
+								<span>Read</span>
+								<span class="checkbox-hint">View pages, tags, search</span>
+							</label>
+							<label class="checkbox-item">
+								<input type="checkbox" name="scopes" value="write" class="form-checkbox"/>
+								<span>Write</span>
+								<span class="checkbox-hint">Create, update, delete pages</span>
+							</label>
+						</div>
+					</div>
+					<div class="modal-actions">
+						<button type="button" class="btn btn-ghost" onclick="document.getElementById('create_token_modal').close()">
+							@components.IconX("sm")
+							Cancel
+						</button>
+						<button type="submit" class="btn btn-primary">
+							@components.IconPlus("sm")
+							Create Token
+						</button>
+					</div>
+				</form>
+			</div>
+		</dialog>
+
+		<!-- Revoke Token Confirmation Modal -->
+		<dialog id="revoke_token_modal" class="modal confirm-modal">
+			<div class="modal-box modal-sm">
+				<div class="confirm-modal-icon danger">
+					@components.IconWarning("xl")
+				</div>
+				<h3 class="confirm-modal-title">Revoke Token</h3>
+				<p class="confirm-modal-message">
+					Are you sure you want to revoke <strong id="revoke-token-name"></strong>? Any applications using this token will stop working.
+				</p>
+				<div class="confirm-modal-actions">
+					<button type="button" class="btn btn-ghost" onclick="document.getElementById('revoke_token_modal').close()">
+						@components.IconX("sm")
+						Cancel
+					</button>
+					<button
+						type="button"
+						id="revoke-confirm-btn"
+						class="btn btn-danger"
+						hx-delete=""
+						hx-target=""
+						hx-swap="outerHTML"
+						hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
+					>
+						@components.IconTrash("sm")
+						Revoke Token
+					</button>
+				</div>
+			</div>
+		</dialog>
+
+		<script>
+			function showRevokeModal(tokenId, tokenName) {
+				var modal = document.getElementById('revoke_token_modal');
+				var nameEl = document.getElementById('revoke-token-name');
+				var confirmBtn = document.getElementById('revoke-confirm-btn');
+
+				nameEl.textContent = tokenName;
+				confirmBtn.setAttribute('hx-delete', '/tokens/' + tokenId);
+				confirmBtn.setAttribute('hx-target', '#token-' + tokenId);
+
+				// Re-process HTMX attributes
+				htmx.process(confirmBtn);
+
+				// Add click handler to close modal after action
+				confirmBtn.onclick = function() {
+					modal.close();
+				};
+
+				modal.showModal();
+			}
+
+			function copyToClipboard(text, btn) {
+				if (navigator.clipboard && navigator.clipboard.writeText) {
+					navigator.clipboard.writeText(text).then(function() {
+						var originalText = btn.innerHTML;
+						btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Copied!';
+						btn.classList.add('btn-success');
+						setTimeout(function() {
+							btn.innerHTML = originalText;
+							btn.classList.remove('btn-success');
+						}, 2000);
+					}).catch(function() {
+						fallbackCopy(text, btn);
+					});
+				} else {
+					fallbackCopy(text, btn);
+				}
+			}
+
+			function fallbackCopy(text, btn) {
+				var textArea = document.createElement('textarea');
+				textArea.value = text;
+				textArea.style.position = 'fixed';
+				textArea.style.left = '-9999px';
+				document.body.appendChild(textArea);
+				textArea.select();
+				try {
+					document.execCommand('copy');
+					var originalText = btn.innerHTML;
+					btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Copied!';
+					btn.classList.add('btn-success');
+					setTimeout(function() {
+						btn.innerHTML = originalText;
+						btn.classList.remove('btn-success');
+					}, 2000);
+				} catch (err) {
+					console.error('Failed to copy:', err);
+				}
+				document.body.removeChild(textArea);
+			}
+		</script>
+	}
+}
+
+script showRevokeModal(tokenId string, tokenName string) {
+	var modal = document.getElementById('revoke_token_modal');
+	var nameEl = document.getElementById('revoke-token-name');
+	var confirmBtn = document.getElementById('revoke-confirm-btn');
+
+	nameEl.textContent = tokenName;
+	confirmBtn.setAttribute('hx-delete', '/tokens/' + tokenId);
+	confirmBtn.setAttribute('hx-target', '#token-' + tokenId);
+	htmx.process(confirmBtn);
+
+	confirmBtn.onclick = function() { modal.close(); };
+	modal.showModal();
+}

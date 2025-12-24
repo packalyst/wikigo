@@ -1,0 +1,159 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+type HomeData struct {
+	layouts.PageData
+	RecentPages []models.PageSummary
+	Stats       *WikiStats
+}
+
+type WikiStats struct {
+	PageCount int
+	UserCount int
+	TagCount  int
+}
+
+templ Home(data HomeData) {
+	@layouts.Base(data.PageData) {
+		<div class="page-header">
+			<h1 class="page-title">Welcome to { data.SiteName }</h1>
+			<p class="page-description">Your collaborative knowledge base for documentation and notes</p>
+		</div>
+
+		<!-- Stats -->
+		if data.Stats != nil {
+			<div class="stats-grid mb-6">
+				<div class="stat-card">
+					<div class="stat-value">{ intToStr(data.Stats.PageCount) }</div>
+					<div class="stat-label">Pages</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value">{ intToStr(data.Stats.UserCount) }</div>
+					<div class="stat-label">Contributors</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value">{ intToStr(data.Stats.TagCount) }</div>
+					<div class="stat-label">Tags</div>
+				</div>
+			</div>
+		}
+
+		<!-- Quick Actions -->
+		<div class="quick-actions mb-6">
+			<a href="/pages" class="quick-action-card">
+				<div class="quick-action-icon">
+					@components.IconDocument("container")
+				</div>
+				<div class="quick-action-content">
+					<h3>Browse Pages</h3>
+					<p>View all wiki pages</p>
+				</div>
+			</a>
+			<a href="/tags" class="quick-action-card">
+				<div class="quick-action-icon">
+					@components.IconTag("container")
+				</div>
+				<div class="quick-action-content">
+					<h3>Browse by Tags</h3>
+					<p>Find content by category</p>
+				</div>
+			</a>
+		</div>
+
+		<!-- Recent Pages -->
+		<div class="card">
+			<div class="card-header">
+				<h2 class="card-title">Recent Updates</h2>
+				<a href="/pages" class="btn btn-ghost btn-sm">
+					View all
+					@components.IconArrowRight("sm")
+				</a>
+			</div>
+			if len(data.RecentPages) == 0 {
+				<div class="empty-state">
+					<span class="empty-state-icon">
+						@components.IconDocument("container")
+					</span>
+					<h3 class="empty-state-title">No pages yet</h3>
+					<p class="empty-state-text">Be the first to create a page!</p>
+					if data.User != nil && data.User.Role.CanEdit() {
+						<a href="/new" class="btn btn-primary">
+							@components.IconPlus("sm")
+							Create Page
+						</a>
+					}
+				</div>
+			} else {
+				<div class="data-list">
+					for _, page := range data.RecentPages {
+						<a href={ templ.SafeURL("/wiki/" + page.Slug) } class="data-list-item">
+							<div class="data-list-icon">
+								@components.IconDocument("container")
+							</div>
+							<div class="data-list-content">
+								<div class="data-list-title">{ page.Title }</div>
+								<div class="data-list-meta">{ page.Author } · { formatRelativeTime(page.UpdatedAt) }</div>
+							</div>
+							<span class="data-list-arrow">
+								@components.IconChevronRight("")
+							</span>
+						</a>
+					}
+				</div>
+			}
+		</div>
+	}
+}
+
+func intToStr(n int) string {
+	return fmt.Sprintf("%d", n)
+}
+
+func formatRelativeTime(t time.Time) string {
+	now := time.Now()
+	diff := now.Sub(t)
+
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		mins := int(diff.Minutes())
+		if mins == 1 {
+			return "1 minute ago"
+		}
+		return intToStr(mins) + " minutes ago"
+	case diff < 24*time.Hour:
+		hours := int(diff.Hours())
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return intToStr(hours) + " hours ago"
+	case diff < 7*24*time.Hour:
+		days := int(diff.Hours() / 24)
+		if days == 1 {
+			return "yesterday"
+		}
+		return intToStr(days) + " days ago"
+	case diff < 30*24*time.Hour:
+		weeks := int(diff.Hours() / 24 / 7)
+		if weeks == 1 {
+			return "1 week ago"
+		}
+		return intToStr(weeks) + " weeks ago"
+	case diff < 365*24*time.Hour:
+		months := int(diff.Hours() / 24 / 30)
+		if months == 1 {
+			return "1 month ago"
+		}
+		return intToStr(months) + " months ago"
+	default:
+		return t.Format("Jan 2, 2006")
+	}
+}

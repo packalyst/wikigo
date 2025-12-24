@@ -1,0 +1,235 @@
+package auth
+
+import (
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+type LoginData struct {
+	layouts.PageData
+	Error             string
+	Next              string
+	Username          string
+	AllowRegistration bool
+}
+
+templ Login(data LoginData) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>Sign in | { data.SiteName }</title>
+		<link rel="stylesheet" href="/static/css/output.css"/>
+		<script>
+			if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+				document.documentElement.setAttribute('data-theme', 'dark');
+			}
+		</script>
+	</head>
+	<body class="auth-body">
+		<div class="auth-container">
+			<div class="auth-logo">
+				@components.Logo(data.SiteName, "lg")
+			</div>
+
+			<div class="card">
+				<div class="card-body">
+					<h1 class="auth-title">Welcome back</h1>
+					<p class="auth-subtitle">Sign in to your account</p>
+
+					if data.Error != "" {
+						<div class="alert alert-error mb-5">
+							<svg class="alert-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+							</svg>
+							<span>{ data.Error }</span>
+						</div>
+					}
+
+					<form action="/login" method="POST">
+						<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+						if data.Next != "" {
+							<input type="hidden" name="next" value={ data.Next }/>
+						}
+
+						<div class="form-group">
+							<label class="form-label" for="username">Username or Email</label>
+							<input
+								type="text"
+								id="username"
+								name="username"
+								value={ data.Username }
+								required
+								autocomplete="username"
+								class="form-input"
+								placeholder="Enter your username or email"
+							/>
+						</div>
+
+						<div class="form-group">
+							<label class="form-label" for="password">Password</label>
+							<input
+								type="password"
+								id="password"
+								name="password"
+								required
+								autocomplete="current-password"
+								class="form-input"
+								placeholder="Enter your password"
+							/>
+						</div>
+
+						<div class="form-group checkbox-row">
+							<input type="checkbox" name="remember" id="remember" class="form-checkbox"/>
+							<label for="remember" class="checkbox-label">Remember me</label>
+						</div>
+
+						<button type="submit" class="btn btn-primary btn-lg w-full">
+							@components.IconLogin("sm")
+							Sign in
+						</button>
+					</form>
+
+					if data.AllowRegistration {
+						<div class="auth-footer">
+							<p class="auth-footer-text">
+								Don't have an account?
+								<a href="/register" class="auth-link">Create one</a>
+							</p>
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+	</body>
+	</html>
+}
+
+type RegisterData struct {
+	layouts.PageData
+	Errors     map[string]string
+	FormValues RegisterFormValues
+}
+
+type RegisterFormValues struct {
+	Username string
+	Email    string
+}
+
+templ Register(data RegisterData) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>Create Account | { data.SiteName }</title>
+		<link rel="stylesheet" href="/static/css/output.css"/>
+		<script>
+			if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+				document.documentElement.setAttribute('data-theme', 'dark');
+			}
+		</script>
+	</head>
+	<body class="auth-body">
+		<div class="auth-container">
+			<div class="auth-logo">
+				@components.Logo(data.SiteName, "lg")
+			</div>
+
+			<div class="card">
+				<div class="card-body">
+					<h1 class="auth-title">Create an account</h1>
+					<p class="auth-subtitle">Join { data.SiteName }</p>
+
+					<form action="/register" method="POST">
+						<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+
+						<div class="form-group">
+							<label class="form-label" for="username">Username</label>
+							<input
+								type="text"
+								id="username"
+								name="username"
+								value={ data.FormValues.Username }
+								required
+								autocomplete="username"
+								class={ "form-input", templ.KV("error", data.Errors["username"] != "") }
+								placeholder="Choose a username"
+							/>
+							if data.Errors["username"] != "" {
+								<p class="form-error">{ data.Errors["username"] }</p>
+							} else {
+								<p class="form-hint">3-32 characters</p>
+							}
+						</div>
+
+						<div class="form-group">
+							<label class="form-label" for="email">Email</label>
+							<input
+								type="email"
+								id="email"
+								name="email"
+								value={ data.FormValues.Email }
+								required
+								autocomplete="email"
+								class={ "form-input", templ.KV("error", data.Errors["email"] != "") }
+								placeholder="Enter your email"
+							/>
+							if data.Errors["email"] != "" {
+								<p class="form-error">{ data.Errors["email"] }</p>
+							}
+						</div>
+
+						<div class="form-group">
+							<label class="form-label" for="password">Password</label>
+							<input
+								type="password"
+								id="password"
+								name="password"
+								required
+								autocomplete="new-password"
+								class={ "form-input", templ.KV("error", data.Errors["password"] != "") }
+								placeholder="Create a password"
+							/>
+							if data.Errors["password"] != "" {
+								<p class="form-error">{ data.Errors["password"] }</p>
+							} else {
+								<p class="form-hint">8+ characters</p>
+							}
+						</div>
+
+						<div class="form-group">
+							<label class="form-label" for="password_confirm">Confirm Password</label>
+							<input
+								type="password"
+								id="password_confirm"
+								name="password_confirm"
+								required
+								autocomplete="new-password"
+								class={ "form-input", templ.KV("error", data.Errors["password_confirm"] != "") }
+								placeholder="Confirm your password"
+							/>
+							if data.Errors["password_confirm"] != "" {
+								<p class="form-error">{ data.Errors["password_confirm"] }</p>
+							}
+						</div>
+
+						<button type="submit" class="btn btn-primary btn-lg w-full">
+							@components.IconUserPlus("sm")
+							Create account
+						</button>
+					</form>
+
+					<div class="auth-footer">
+						<p class="auth-footer-text">
+							Already have an account?
+							<a href="/login" class="auth-link">Sign in</a>
+						</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
+	</html>
+}

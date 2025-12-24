@@ -1,0 +1,37 @@
+package components
+
+// Modal renders a modal dialog container
+// Usage: @Modal("my_modal", "Modal Title") { ...content... }
+templ Modal(id string, title string) {
+	<dialog id={ id } class="modal">
+		<div class="modal-box">
+			<button type="button" class="icon-btn modal-close" onclick={ closeModal(id) }>
+				<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+				</svg>
+			</button>
+			<h3 class="modal-title">{ title }</h3>
+			{ children... }
+		</div>
+	</dialog>
+}
+
+// ModalActions renders the modal footer with action buttons
+templ ModalActions() {
+	<div class="modal-actions">
+		{ children... }
+	</div>
+}
+
+// ModalCancelButton renders a cancel button that closes the modal
+templ ModalCancelButton(modalId string, label string) {
+	<button type="button" class="btn btn-ghost" onclick={ closeModal(modalId) }>{ label }</button>
+}
+
+script closeModal(id string) {
+	document.getElementById(id).close();
+}
+
+script openModal(id string) {
+	document.getElementById(id).showModal();
+}

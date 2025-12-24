@@ -1,0 +1,143 @@
+package components
+
+import (
+	"strings"
+	"gowiki/internal/database"
+	"gowiki/internal/services"
+)
+
+// getExpandedSlugs returns a JSON object of slugs that should be expanded
+// Expands all parent paths AND the current page itself (if it's a folder)
+func getExpandedSlugs(currentSlug string) string {
+	if currentSlug == "" {
+		return "{}"
+	}
+
+	var expanded []string
+
+	// Always expand the current slug (in case it's a parent with children)
+	expanded = append(expanded, "'"+currentSlug+"': true")
+
+	// Also expand all parent paths
+	parts := strings.Split(currentSlug, "/")
+	for i := 1; i < len(parts); i++ {
+		parentSlug := strings.Join(parts[:i], "/")
+		expanded = append(expanded, "'"+parentSlug+"': true")
+	}
+
+	return "{" + strings.Join(expanded, ", ") + "}"
+}
+
+func expandedClass(slug string) string {
+	return "{ 'expanded': expanded['" + slug + "'] }"
+}
+
+func toggleExpanded(slug string) string {
+	return "expanded['" + slug + "'] = !expanded['" + slug + "']"
+}
+
+func showChildren(slug string) string {
+	return "expanded['" + slug + "']"
+}
+
+// isExpanded checks if a folder should be initially expanded
+func isExpanded(slug, currentSlug string) bool {
+	if currentSlug == "" {
+		return false
+	}
+	// Expand if current page is this folder or a descendant
+	return slug == currentSlug || strings.HasPrefix(currentSlug, slug+"/")
+}
+
+// isRootParent checks if this is a root-level item that contains the active page
+func isRootParent(slug, currentSlug string) bool {
+	if currentSlug == "" {
+		return false
+	}
+	// Must not contain "/" (root level) and active page must be under it
+	return !strings.Contains(slug, "/") && strings.HasPrefix(currentSlug, slug+"/")
+}
+
+// isActivePage checks if this is the actual current page (not just a parent)
+func isActivePage(slug, currentSlug string) bool {
+	return slug == currentSlug
+}
+
+templ Sidebar(tree []*database.PageTreeNode, currentSlug string, toc []services.TOCEntry) {
+	<div class="sidebar-nav">
+		<div class="sidebar-card">
+			@NavTree(tree, currentSlug)
+		</div>
+		if len(toc) > 1 {
+			<div class="sidebar-card">
+				<div class="sidebar-section-title">On this page</div>
+				<ul class="sidebar-toc-list">
+					for _, entry := range toc {
+						<li class={ "sidebar-toc-item", templ.KV("toc-indent", entry.Level > 2) }>
+							<a href={ templ.SafeURL("#" + entry.ID) } class="sidebar-toc-link" data-target={ entry.ID }>
+								<svg class="toc-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+									<path d="M9 6l6 6-6 6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+								<span>{ entry.Text }</span>
+							</a>
+						</li>
+					}
+				</ul>
+			</div>
+		}
+	</div>
+}
+
+templ NavTree(tree []*database.PageTreeNode, currentSlug string) {
+	<nav class="nav-tree" x-data={ "{ expanded: " + getExpandedSlugs(currentSlug) + " }" }>
+		<div class="sidebar-section-title">
+			<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+			</svg>
+			<span>Pages</span>
+		</div>
+		<ul class="nav-tree-list">
+			for _, node := range tree {
+				@NavTreeNode(node, currentSlug)
+			}
+		</ul>
+	</nav>
+}
+
+templ NavTreeNode(node *database.PageTreeNode, currentSlug string) {
+	<li class="nav-tree-item">
+		if len(node.Children) > 0 {
+			<!-- Folder with children -->
+			<button
+				type="button"
+				class={ "nav-tree-btn", templ.KV("is-expanded", isExpanded(node.Slug, currentSlug)), templ.KV("root-active", isRootParent(node.Slug, currentSlug)) }
+				@click={ toggleExpanded(node.Slug) }
+				x-bind:class={ expandedClass(node.Slug) }
+			>
+				<svg class="nav-tree-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+				</svg>
+				<span class="nav-tree-text">{ node.Title }</span>
+				<svg class="nav-tree-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+					<path d="M9 6l6 6-6 6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+				</svg>
+			</button>
+			<ul class="nav-tree-submenu" x-show={ showChildren(node.Slug) } x-cloak>
+				for _, child := range node.Children {
+					@NavTreeNode(child, currentSlug)
+				}
+			</ul>
+		} else {
+			<!-- Leaf node -->
+			<a
+				href={ templ.SafeURL("/wiki/" + node.Slug) }
+				class={ "nav-tree-link", templ.KV("active", isActivePage(node.Slug, currentSlug)) }
+			>
+				<svg class="nav-tree-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+				</svg>
+				<span class="nav-tree-text">{ node.Title }</span>
+			</a>
+		}
+	</li>
+}

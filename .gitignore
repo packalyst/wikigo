@@ -1,0 +1,81 @@
+# Binaries
+gowiki
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of coverage
+*.out
+coverage.html
+
+# Go workspace
+go.work
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Dependencies
+node_modules/
+
+# Data files
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# Backups
+backups/
+
+# Generated CSS (Tailwind output)
+static/css/output.css
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temp files
+tmp/
+temp/
+.tmp/
+
+# Generated templ files
+*_templ.go
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Air live reload
+.air.toml
+
+# Development files
+Dockerfile.dev
+docker-compose.dev.yml
+WIKI_PLAN.md
+Makefile
+
+# Claude settings
+.claude/
+
+# Build artifacts
+*.tar.gz
+docker_image.yml

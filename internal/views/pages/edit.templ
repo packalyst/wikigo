@@ -1,0 +1,404 @@
+package pages
+
+import (
+	"fmt"
+	"strings"
+	"gowiki/internal/models"
+	"gowiki/internal/views/layouts"
+	"gowiki/internal/views/components"
+)
+
+type EditData struct {
+	layouts.PageData
+	Page       *models.Page
+	IsNew      bool
+	Errors     map[string]string
+	FormValues EditFormValues
+	ChildCount int
+}
+
+type EditFormValues struct {
+	Title   string
+	Slug    string
+	Content string
+	Tags    string
+}
+
+templ Edit(data EditData) {
+	@layouts.Base(data.PageData) {
+		<div class="content-main">
+			<div class="page-header">
+				<div class="page-header-top">
+					<h1 class="page-title">
+						if data.IsNew {
+							Create New Page
+						} else {
+							Edit: { data.Page.Title }
+						}
+					</h1>
+					<a
+						if data.IsNew {
+							href="/"
+						} else {
+							href={ templ.SafeURL("/wiki/" + data.Page.Slug) }
+						}
+						class="btn btn-ghost btn-sm"
+					>
+						@components.IconX("sm")
+						Cancel
+					</a>
+				</div>
+			</div>
+
+			<form
+					if data.IsNew {
+						action="/pages"
+					} else {
+						action={ templ.SafeURL("/pages/" + intToStr64(data.Page.ID)) }
+					}
+					method="POST"
+					x-data="{ preview: false }"
+				>
+					<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
+					if !data.IsNew {
+						<input type="hidden" name="_method" value="PUT"/>
+					}
+
+					<div class="form-group">
+						<label for="title" class="form-label">Title <span class="form-required">*</span></label>
+						<input
+							type="text"
+							id="title"
+							name="title"
+							if data.Page != nil {
+								value={ data.Page.Title }
+							} else {
+								value={ data.FormValues.Title }
+							}
+							required
+							class={ "form-input", templ.KV("error", data.Errors["title"] != "") }
+							placeholder="Page title"
+						/>
+						if data.Errors["title"] != "" {
+							<p class="form-error">{ data.Errors["title"] }</p>
+						}
+					</div>
+
+					<div class="form-group">
+						<label for="slug" class="form-label">URL Slug</label>
+						<div class="slug-input-group">
+							<span id="slug-prefix" class="slug-prefix">/wiki/</span>
+							<input
+								type="text"
+								id="slug-input"
+								value={ getSlugInputValue(data) }
+								class="form-input slug-input"
+								placeholder="page-name"
+								data-initial-slug={ getSlugValue(data) }
+							/>
+							<input type="hidden" id="slug" name="slug" value={ getSlugValue(data) }/>
+						</div>
+						if data.Errors["slug"] != "" {
+							<p class="form-error">{ data.Errors["slug"] }</p>
+						} else {
+							<p class="form-hint">Use / to create hierarchy (e.g., linux/ubuntu/networking)</p>
+						}
+					</div>
+
+					<div class="form-group">
+						<div class="form-header-row">
+							<label for="content" class="form-label m-0">Content <span class="form-required">*</span></label>
+							<div class="tabs">
+								<button type="button" @click="preview = false" :class="!preview ? 'tab active' : 'tab'" class="tab">Write</button>
+								<button type="button" @click="preview = true; $nextTick(() => $dispatch('preview-requested'))" :class="preview ? 'tab active' : 'tab'" class="tab">Preview</button>
+							</div>
+						</div>
+
+						<div x-show="!preview" class="editor-toolbar">
+							@editorButton("Bold", "bold", "B", "font-weight: 700;")
+							@editorButton("Italic", "italic", "I", "font-style: italic;")
+							@editorButton("Code", "code", "</>", "font-family: monospace;")
+							<span class="editor-divider"></span>
+							@editorButton("H1", "h1", "H1", "font-weight: 700;")
+							@editorButton("H2", "h2", "H2", "font-weight: 700;")
+							@editorButton("H3", "h3", "H3", "font-weight: 700;")
+							<span class="editor-divider"></span>
+							@editorButton("List", "bullet", "List", "")
+							@editorButton("Link", "link", "Link", "")
+							@editorButton("Wiki Link", "wikilink", "[[]]", "")
+						</div>
+
+						<textarea
+							x-show="!preview"
+							id="content"
+							name="content"
+							rows="20"
+							required
+							class="form-input form-textarea editor-textarea"
+							placeholder="Write your content in Markdown..."
+						>{ getContent(data) }</textarea>
+
+						<div
+							x-show="preview"
+							id="preview-content"
+							class="prose preview-pane"
+							hx-post="/preview"
+							hx-trigger="preview-requested from:body"
+							hx-include="#content"
+							hx-swap="innerHTML"
+						>
+							<p class="preview-placeholder">Click Preview to render markdown...</p>
+						</div>
+
+						if data.Errors["content"] != "" {
+							<p class="form-error">{ data.Errors["content"] }</p>
+						}
+					</div>
+
+					<div class="form-group">
+						<label for="tags" class="form-label">Tags</label>
+						<input
+							type="text"
+							id="tags"
+							name="tags"
+							value={ getTags(data) }
+							class="form-input"
+							placeholder="tag1, tag2, tag3"
+						/>
+						<p class="form-hint">Separate tags with commas</p>
+					</div>
+
+					<div class="form-footer">
+						<button type="submit" class="btn btn-primary">
+							if data.IsNew {
+								@components.IconPlus("sm")
+								Create Page
+							} else {
+								@components.IconSave("sm")
+								Save Changes
+							}
+						</button>
+						if !data.IsNew {
+							<button
+								type="button"
+								class="btn btn-danger btn-sm"
+								onclick="document.getElementById('delete_page_modal').showModal()"
+							>
+								@components.IconTrash("sm")
+								Delete
+							</button>
+						}
+					</div>
+			</form>
+		</div>
+
+		if !data.IsNew {
+			<!-- Delete Page Confirmation Modal -->
+			<dialog id="delete_page_modal" class="modal confirm-modal">
+				<div class="modal-box modal-sm">
+					<div class="confirm-modal-icon danger">
+						@components.IconTrash("lg")
+					</div>
+					<h3 class="confirm-modal-title">Delete Page</h3>
+					<p class="confirm-modal-message">
+						Are you sure you want to delete <strong>{ data.Page.Title }</strong>?
+						if data.ChildCount > 0 {
+							<br/><br/>
+							<span class="text-error">
+								Warning: This will also delete { fmt.Sprintf("%d", data.ChildCount) } child page(s).
+							</span>
+						}
+						<br/><br/>This action cannot be undone.
+					</p>
+					<div class="confirm-modal-actions">
+						<button type="button" class="btn btn-ghost" onclick="document.getElementById('delete_page_modal').close()">
+							@components.IconX("sm")
+							Cancel
+						</button>
+						<button
+							type="button"
+							class="btn btn-danger"
+							hx-delete={ "/pages/" + intToStr64(data.Page.ID) }
+							hx-headers={ `{"X-CSRF-Token": "` + data.CSRFToken + `"}` }
+							onclick="document.getElementById('delete_page_modal').close()"
+						>
+							@components.IconTrash("sm")
+							if data.ChildCount > 0 {
+								Delete All
+							} else {
+								Delete Page
+							}
+						</button>
+					</div>
+				</div>
+			</dialog>
+		}
+
+		<script>
+			const mdButtons = {
+				bold: { prefix: '**', suffix: '**' },
+				italic: { prefix: '_', suffix: '_' },
+				code: { prefix: '`', suffix: '`' },
+				link: { prefix: '[', suffix: '](url)' },
+				h1: { prefix: '# ', suffix: '' },
+				h2: { prefix: '## ', suffix: '' },
+				h3: { prefix: '### ', suffix: '' },
+				bullet: { prefix: '- ', suffix: '' },
+				wikilink: { prefix: '[[', suffix: ']]' }
+			};
+			function insertMarkdown(btnKey) {
+				const textarea = document.getElementById('content');
+				if (!textarea) return;
+				const btn = mdButtons[btnKey];
+				if (!btn) return;
+				const start = textarea.selectionStart;
+				const end = textarea.selectionEnd;
+				const text = textarea.value;
+				const selected = text.substring(start, end);
+				const replacement = btn.prefix + selected + btn.suffix;
+				textarea.value = text.substring(0, start) + replacement + text.substring(end);
+				textarea.focus();
+				textarea.selectionStart = start + btn.prefix.length;
+				textarea.selectionEnd = start + btn.prefix.length + selected.length;
+			}
+
+			// Dynamic slug prefix handling
+			(function() {
+				const prefixEl = document.getElementById('slug-prefix');
+				const inputEl = document.getElementById('slug-input');
+				const hiddenEl = document.getElementById('slug');
+				if (!prefixEl || !inputEl || !hiddenEl) return;
+
+				// Initialize pathSegments from existing slug when editing
+				let pathSegments = [];
+				const initialSlug = inputEl.dataset.initialSlug || '';
+				if (initialSlug && initialSlug.includes('/')) {
+					const parts = initialSlug.split('/');
+					parts.pop(); // Remove last segment (it's in the input)
+					pathSegments = parts;
+				}
+
+				function slugify(text) {
+					return text.toLowerCase()
+						.replace(/[^a-z0-9\s-]/g, '')
+						.replace(/\s+/g, '-')
+						.replace(/-+/g, '-')
+						.replace(/^-|-$/g, '');
+				}
+
+				function updateHidden() {
+					let lastPart = inputEl.value;
+					// If input is empty but we have path segments, generate from title
+					if (!lastPart && pathSegments.length > 0) {
+						const titleEl = document.getElementById('title');
+						if (titleEl && titleEl.value) {
+							lastPart = slugify(titleEl.value);
+						}
+					}
+					const full = pathSegments.join('/') + (pathSegments.length ? '/' : '') + lastPart;
+					hiddenEl.value = full.replace(/\/+/g, '/').replace(/^\/|\/$/g, '');
+				}
+
+				function updatePrefix() {
+					const path = pathSegments.length ? pathSegments.join('/') + '/' : '';
+					prefixEl.textContent = '/wiki/' + path;
+					updateHidden();
+				}
+
+				inputEl.addEventListener('input', function(e) {
+					const val = inputEl.value;
+					// If typed a slash, move content before slash to prefix
+					if (val.includes('/')) {
+						const parts = val.split('/');
+						const last = parts.pop();
+						parts.forEach(p => {
+							if (p.trim()) pathSegments.push(p.trim().toLowerCase().replace(/\s+/g, '-'));
+						});
+						inputEl.value = last;
+						updatePrefix();
+					} else {
+						updateHidden();
+					}
+				});
+
+				inputEl.addEventListener('keydown', function(e) {
+					// Backspace on empty input removes last segment from prefix
+					if (e.key === 'Backspace' && inputEl.value === '' && pathSegments.length > 0) {
+						e.preventDefault();
+						inputEl.value = pathSegments.pop();
+						updatePrefix();
+						// Move cursor to end
+						setTimeout(() => {
+							inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
+						}, 0);
+					}
+				});
+
+				// Update slug when title changes (if slug input is empty and we have path segments)
+				const titleEl = document.getElementById('title');
+				if (titleEl) {
+					titleEl.addEventListener('input', function() {
+						if (!inputEl.value && pathSegments.length > 0) {
+							updateHidden();
+						}
+					});
+				}
+
+				updatePrefix();
+			})();
+		</script>
+	}
+}
+
+templ editorButton(title, btnKey, label, style string) {
+	<button
+		type="button"
+		title={ title }
+		class="editor-btn"
+		style={ style }
+		data-btn={ btnKey }
+		onclick="insertMarkdown(this.dataset.btn)"
+	>
+		{ label }
+	</button>
+}
+
+func getContent(data EditData) string {
+	if data.Page != nil {
+		return data.Page.Content
+	}
+	return data.FormValues.Content
+}
+
+func getTags(data EditData) string {
+	if data.Page != nil && len(data.Page.Tags) > 0 {
+		names := make([]string, len(data.Page.Tags))
+		for i, t := range data.Page.Tags {
+			names[i] = t.Name
+		}
+		return strings.Join(names, ", ")
+	}
+	return data.FormValues.Tags
+}
+
+func intToStr64(n int64) string {
+	return fmt.Sprintf("%d", n)
+}
+
+// getSlugValue returns the full slug for the hidden input
+func getSlugValue(data EditData) string {
+	if data.Page != nil && data.Page.Slug != "" {
+		return data.Page.Slug
+	}
+	return data.FormValues.Slug
+}
+
+// getSlugInputValue returns just the last segment for the visible input
+func getSlugInputValue(data EditData) string {
+	slug := getSlugValue(data)
+	if slug == "" {
+		return ""
+	}
+	parts := strings.Split(slug, "/")
+	return parts[len(parts)-1]
+}

@@ -1,0 +1,139 @@
+package components
+
+// Card renders a card container
+templ Card() {
+	<div class="card">
+		{ children... }
+	</div>
+}
+
+// CardWithHeader renders a card with a header title
+templ CardWithHeader(title string) {
+	<div class="card">
+		<div class="card-header">
+			<h2 class="card-title">{ title }</h2>
+		</div>
+		<div class="card-body">
+			{ children... }
+		</div>
+	</div>
+}
+
+// CardHeader renders a card header with title and optional action slot
+templ CardHeader(title string) {
+	<div class="card-header">
+		<h2 class="card-title">{ title }</h2>
+		{ children... }
+	</div>
+}
+
+// CardBody renders a card body
+templ CardBody() {
+	<div class="card-body">
+		{ children... }
+	</div>
+}
+
+// CardBodyNoPadding renders a card body without padding
+templ CardBodyNoPadding() {
+	<div class="card-body p-0">
+		{ children... }
+	</div>
+}
+
+// PageHeader renders a simple page header with title and description
+templ PageHeader(title string, description string) {
+	<div class="page-header">
+		<div class="page-header-text">
+			<h1 class="page-title">{ title }</h1>
+			if description != "" {
+				<p class="page-description">{ description }</p>
+			}
+		</div>
+	</div>
+}
+
+// PageHeaderWithIcon renders a page header with an icon slot, title, description, and actions
+templ PageHeaderWithIcon(title string, description string) {
+	<div class="page-header page-header-styled">
+		<div class="page-header-content">
+			<div class="page-header-icon">
+				{ children... }
+			</div>
+			<div class="page-header-text">
+				<h1 class="page-title">{ title }</h1>
+				if description != "" {
+					<p class="page-description">{ description }</p>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+// PageHeaderWithActions renders a page header with title, description, and action buttons
+templ PageHeaderWithActions(title string, description string) {
+	<div class="page-header">
+		<div class="page-header-text">
+			<h1 class="page-title">{ title }</h1>
+			if description != "" {
+				<p class="page-description">{ description }</p>
+			}
+		</div>
+		<div class="page-header-actions">
+			{ children... }
+		</div>
+	</div>
+}
+
+// PageHeaderFull renders a styled page header with icon slot and actions slot
+templ PageHeaderFull(title string, description string) {
+	<div class="page-header page-header-styled">
+		<div class="page-header-content">
+			{ children... }
+			<div class="page-header-text">
+				<h1 class="page-title">{ title }</h1>
+				if description != "" {
+					<p class="page-description">{ description }</p>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+// ConfirmModal renders a reusable confirmation modal dialog
+templ ConfirmModal(id string, title string, message string, confirmText string, confirmClass string, formAttrs templ.Attributes) {
+	<dialog id={ id } class="modal confirm-modal">
+		<div class="modal-box modal-sm">
+			<div class="confirm-modal-icon">
+				<svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+				</svg>
+			</div>
+			<h3 class="confirm-modal-title">{ title }</h3>
+			<p class="confirm-modal-message">{ message }</p>
+			<div class="confirm-modal-actions">
+				<button type="button" class="btn btn-ghost" onclick={ closeModal(id) }>Cancel</button>
+				<form { formAttrs... } style="display: inline;">
+					<button type="submit" class={ "btn " + confirmClass } onclick={ closeModal(id) }>
+						{ confirmText }
+					</button>
+				</form>
+			</div>
+		</div>
+	</dialog>
+}
+
+// StatCard renders a statistics card with value and label
+templ StatCard(value string, label string) {
+	<div class="stat-card">
+		<div class="stat-value">{ value }</div>
+		<div class="stat-label">{ label }</div>
+	</div>
+}
+
+// StatsGrid renders a grid container for stat cards
+templ StatsGrid() {
+	<div class="stats-grid mb-6">
+		{ children... }
+	</div>
+}
