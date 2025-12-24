@@ -113,7 +113,7 @@ func validateShareLink(ctx context.Context, db *database.DB, link *models.ShareL
 
 	// Check IP limit
 	if link.MaxIPs != nil {
-		ipAddress := sanitizeIP(c.RealIP())
+		ipAddress := SanitizeIP(c.RealIP())
 		uniqueIPs, err := db.GetShareLinkUniqueIPCount(ctx, link.ID)
 		if err != nil {
 			c.Logger().Errorf("failed to get unique IP count: %v", err)
@@ -156,7 +156,7 @@ func RecordShareAccess(c echo.Context, db *database.DB) error {
 	// Record the access
 	access := &models.ShareLinkAccess{
 		ShareLinkID: shareCtx.Link.ID,
-		IPAddress:   sanitizeIP(c.RealIP()),
+		IPAddress:   SanitizeIP(c.RealIP()),
 		UserAgent:   truncateUserAgent(c.Request().UserAgent()),
 	}
 
@@ -252,8 +252,8 @@ func isValidTokenFormat(token string) bool {
 	return true
 }
 
-// sanitizeIP extracts and sanitizes the IP address.
-func sanitizeIP(ip string) string {
+// SanitizeIP extracts and sanitizes the IP address.
+func SanitizeIP(ip string) string {
 	// Handle IPv6 addresses with zone identifiers
 	if strings.Contains(ip, "%") {
 		ip = ip[:strings.Index(ip, "%")]

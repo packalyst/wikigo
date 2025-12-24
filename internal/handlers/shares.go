@@ -160,47 +160,14 @@ func (h *Handlers) CreateShare(c echo.Context) error {
 	// Build the share URL
 	shareURL := fmt.Sprintf("%s/s/%s", strings.TrimRight(h.config.Site.URL, "/"), token)
 
-	// For HTMX requests, return the share URL
+	// For HTMX requests, return the success template
 	if c.Request().Header.Get("HX-Request") == "true" {
-		childrenText := ""
-		if includeChildren {
-			childrenText = " and all child pages"
+		data := pages.ShareSuccessData{
+			PageTitle:       page.Title,
+			IncludeChildren: includeChildren,
+			ShareURL:        shareURL,
 		}
-		html := fmt.Sprintf(`
-			<div class="share-success">
-				<div class="share-success-icon">
-					<svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-					</svg>
-				</div>
-				<h3 class="share-success-title">Share Link Created!</h3>
-				<p class="share-success-desc">This link provides access to "<strong>%s</strong>"%s</p>
-				<div class="share-url-group">
-					<input type="text" class="form-input share-url-input" value="%s" readonly id="share-url" onclick="this.select()">
-					<button type="button" class="btn btn-primary" id="copy-btn" onclick="copyShareUrl(this)">
-						<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
-						</svg>
-						Copy Link
-					</button>
-				</div>
-				<div class="modal-actions">
-					<a href="/shares" class="btn btn-ghost">View All Shares</a>
-					<button type="button" class="btn btn-secondary" onclick="closeShareModal()">Done</button>
-				</div>
-			</div>
-			<script>
-				function copyShareUrl(btn) {
-					var url = document.getElementById('share-url').value;
-					navigator.clipboard.writeText(url).then(function() {
-						btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Copied!';
-						btn.classList.remove('btn-primary');
-						btn.classList.add('btn-success');
-					});
-				}
-			</script>
-		`, page.Title, childrenText, shareURL)
-		return c.HTML(http.StatusOK, html)
+		return pages.ShareSuccess(data).Render(ctx, c.Response().Writer)
 	}
 
 	h.setFlash(c, "success", "Share link created: "+shareURL)
@@ -431,27 +398,10 @@ func (h *Handlers) renderSharedError(c echo.Context, title, message string) erro
 	return pages.SharedError(data).Render(c.Request().Context(), c.Response().Writer)
 }
 
-// Helper functions
+// Helper functions - use middleware versions for consistency
 
 func sanitizeIP(ip string) string {
-	// Remove port if present
-	if idx := strings.LastIndex(ip, ":"); idx != -1 {
-		// Check if it's IPv6
-		if strings.Count(ip, ":") > 1 {
-			// IPv6 - only remove if after ]
-			if bracketIdx := strings.LastIndex(ip, "]"); bracketIdx != -1 && idx > bracketIdx {
-				ip = ip[:idx]
-			}
-		} else {
-			// IPv4 with port
-			ip = ip[:idx]
-		}
-	}
-	// Limit length
-	if len(ip) > 45 {
-		ip = ip[:45]
-	}
-	return ip
+	return middleware.SanitizeIP(ip)
 }
 
 func truncateString(s string, maxLen int) string {

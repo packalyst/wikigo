@@ -108,20 +108,30 @@ templ NavTreeNode(node *database.PageTreeNode, currentSlug string) {
 	<li class="nav-tree-item">
 		if len(node.Children) > 0 {
 			<!-- Folder with children -->
-			<button
-				type="button"
-				class={ "nav-tree-btn", templ.KV("is-expanded", isExpanded(node.Slug, currentSlug)), templ.KV("root-active", isRootParent(node.Slug, currentSlug)) }
-				@click={ toggleExpanded(node.Slug) }
+			<div
+				class={ "nav-tree-folder", templ.KV("is-expanded", isExpanded(node.Slug, currentSlug)), templ.KV("root-active", isRootParent(node.Slug, currentSlug)) }
 				x-bind:class={ expandedClass(node.Slug) }
 			>
-				<svg class="nav-tree-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-				</svg>
-				<span class="nav-tree-text">{ node.Title }</span>
-				<svg class="nav-tree-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-					<path d="M9 6l6 6-6 6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-				</svg>
-			</button>
+				<a
+					href={ templ.SafeURL("/wiki/" + node.Slug) }
+					class={ "nav-tree-link", templ.KV("active", isActivePage(node.Slug, currentSlug)) }
+				>
+					<svg class="nav-tree-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+					</svg>
+					<span class="nav-tree-text">{ node.Title }</span>
+				</a>
+				<button
+					type="button"
+					class="nav-tree-toggle"
+					@click={ toggleExpanded(node.Slug) }
+					title="Toggle submenu"
+				>
+					<svg class="nav-tree-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+						<path d="M9 6l6 6-6 6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+					</svg>
+				</button>
+			</div>
 			<ul class="nav-tree-submenu" x-show={ showChildren(node.Slug) } x-cloak>
 				for _, child := range node.Children {
 					@NavTreeNode(child, currentSlug)

@@ -3011,9 +3011,34 @@ a:hover {
 }
 
 /* Shared base styles for buttons and links */
-.nav-tree-btn,
+/* Folder container - holds link and toggle */
+.nav-tree-folder {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.nav-tree-folder:hover {
+  background: var(--color-gray-50);
+}
+
+/* Root parent with active descendant */
+.nav-tree-folder.root-active {
+  color: var(--color-gray-900);
+  font-weight: 500;
+}
+
+.nav-tree-folder.root-active .nav-tree-icon {
+  color: var(--color-primary-500);
+}
+
+/* Expanded state - rotate chevron */
+.nav-tree-folder.expanded .nav-tree-chevron {
+  transform: rotate(90deg);
+}
+
 .nav-tree-link {
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3029,22 +3054,18 @@ a:hover {
   transition: color 0.15s, background 0.15s;
 }
 
-.nav-tree-btn:hover,
+.nav-tree-folder .nav-tree-link {
+  padding-right: 0;
+}
+
 .nav-tree-link:hover {
   color: var(--color-gray-900);
-  background: var(--color-gray-50);
   text-decoration: none;
 }
 
-/* Root parent with active descendant */
-.nav-tree-btn.root-active {
-  color: var(--color-gray-900);
-  font-weight: 500;
-}
-
-/* Expanded state - just rotate chevron, no background */
-.nav-tree-btn.expanded .nav-tree-chevron {
-  transform: rotate(90deg);
+/* Don't show background on link hover when inside folder */
+.nav-tree-item > .nav-tree-link:hover {
+  background: var(--color-gray-50);
 }
 
 /* Active leaf - the actual current page */
@@ -3054,8 +3075,34 @@ a:hover {
   font-weight: 500;
 }
 
+.nav-tree-folder .nav-tree-link.active {
+  background: transparent;
+}
+
+.nav-tree-folder:has(.nav-tree-link.active) {
+  background: var(--color-gray-100);
+}
+
 .nav-tree-link.active:hover {
   background: var(--color-gray-100);
+}
+
+/* Toggle button for expand/collapse */
+.nav-tree-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-gray-400);
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.nav-tree-toggle:hover {
+  color: var(--color-gray-700);
 }
 
 /* Icon on the left */
@@ -3066,13 +3113,8 @@ a:hover {
   color: var(--color-gray-400);
 }
 
-.nav-tree-btn:hover .nav-tree-icon,
 .nav-tree-link:hover .nav-tree-icon {
   color: var(--color-gray-600);
-}
-
-.nav-tree-btn.root-active .nav-tree-icon {
-  color: var(--color-primary-500);
 }
 
 .nav-tree-link.active .nav-tree-icon {
@@ -3097,7 +3139,7 @@ a:hover {
   margin-left: auto;
 }
 
-.nav-tree-btn:hover .nav-tree-chevron {
+.nav-tree-toggle:hover .nav-tree-chevron {
   color: var(--color-gray-600);
 }
 
@@ -3109,13 +3151,13 @@ a:hover {
   border-left: 1px solid var(--color-gray-200);
 }
 
-.nav-tree-submenu .nav-tree-btn,
-.nav-tree-submenu .nav-tree-link {
+.nav-tree-submenu .nav-tree-folder .nav-tree-link,
+.nav-tree-submenu > .nav-tree-item > .nav-tree-link {
   padding-left: 12px;
 }
 
-.nav-tree-submenu .nav-tree-submenu .nav-tree-btn,
-.nav-tree-submenu .nav-tree-submenu .nav-tree-link {
+.nav-tree-submenu .nav-tree-submenu .nav-tree-folder .nav-tree-link,
+.nav-tree-submenu .nav-tree-submenu > .nav-tree-item > .nav-tree-link {
   padding-left: 12px;
 }
 

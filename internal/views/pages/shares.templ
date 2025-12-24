@@ -267,6 +267,67 @@ templ CreateShareForm(data CreateShareFormData) {
 	</form>
 }
 
+// ShareSuccessData contains data for the share success modal.
+type ShareSuccessData struct {
+	PageTitle       string
+	IncludeChildren bool
+	ShareURL        string
+}
+
+// ShareSuccess renders the success message after creating a share link.
+templ ShareSuccess(data ShareSuccessData) {
+	<div class="share-success">
+		<div class="share-success-icon">
+			<svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+			</svg>
+		</div>
+		<h3 class="share-success-title">Share Link Created!</h3>
+		<p class="share-success-desc">
+			This link provides access to "<strong>{ data.PageTitle }</strong>"
+			if data.IncludeChildren {
+				and all child pages
+			}
+		</p>
+		<div class="share-url-group">
+			<input type="text" class="form-input share-url-input" value={ data.ShareURL } readonly id="share-url" onclick="this.select()"/>
+			<button type="button" class="btn btn-primary" id="copy-btn" onclick="copyShareUrl(this)">
+				<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+				</svg>
+				Copy Link
+			</button>
+		</div>
+		<div class="modal-actions">
+			<a href="/shares" class="btn btn-ghost">View All Shares</a>
+			<button type="button" class="btn btn-secondary" onclick="closeShareModal()">Done</button>
+		</div>
+	</div>
+	<script>
+		function copyShareUrl(btn) {
+			var url = document.getElementById('share-url').value;
+			var onSuccess = function() {
+				btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Copied!';
+				btn.classList.remove('btn-primary');
+				btn.classList.add('btn-success');
+			};
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(url).then(onSuccess);
+			} else {
+				var ta = document.createElement('textarea');
+				ta.value = url;
+				ta.style.position = 'fixed';
+				ta.style.left = '-9999px';
+				document.body.appendChild(ta);
+				ta.select();
+				document.execCommand('copy');
+				document.body.removeChild(ta);
+				onSuccess();
+			}
+		}
+	</script>
+}
+
 // ShareStatsData contains data for the share stats page.
 type ShareStatsData struct {
 	layouts.PageData
